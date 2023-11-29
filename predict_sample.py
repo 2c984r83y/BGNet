@@ -47,6 +47,7 @@ right_img = np.ascontiguousarray(right_img, dtype=np.float32)
 preprocess = get_transform()
 left_img = preprocess(left_img)
 right_img = preprocess(right_img)
+
 # GPU dry run
 imgL = torch.from_numpy(np.zeros_like(left_img))
 imgR = torch.from_numpy(np.zeros_like(right_img))
