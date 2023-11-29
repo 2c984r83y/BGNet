@@ -48,14 +48,16 @@ preprocess = get_transform()
 left_img = preprocess(left_img)
 right_img = preprocess(right_img)
 # GPU dry run
+imgL = torch.from_numpy(np.zeros_like(left_img))
+imgR = torch.from_numpy(np.zeros_like(right_img))
 with torch.no_grad():
-    pred,_ = model(left_img.unsqueeze(0).cuda(), right_img.unsqueeze(0).cuda()) 
-    pred,_ = model(left_img.unsqueeze(0).cuda(), right_img.unsqueeze(0).cuda()) 
-    pred,_ = model(left_img.unsqueeze(0).cuda(), right_img.unsqueeze(0).cuda()) 
+    pred,_ = model(imgL.unsqueeze(0).cuda(), imgR.unsqueeze(0).cuda()) 
+# start timing
 time_start=time.time()
+# real run, using no_grad() to reduce memory usage and speed up
 with torch.no_grad():
-    pred,_ = model(left_img.unsqueeze(0).cuda(), right_img.unsqueeze(0).cuda()) 
-time_end=time.time()
-print('time cost: ',time_end-time_start,'s')
+    pred,_ = model(left_img.unsqueeze(0).cuda(), right_img.unsqueeze(0).cuda())
+# print time cost
+print('time cost: ',time.time()-time_start,'s')
 pred = pred[0].data.cpu().numpy() * 256   
 skimage.io.imsave('sample_disp.png',pred.astype('uint16'))
