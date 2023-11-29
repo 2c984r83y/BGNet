@@ -60,5 +60,6 @@ with torch.no_grad():
     pred,_ = model(left_img.unsqueeze(0).cuda(), right_img.unsqueeze(0).cuda())
 # print time cost
 print('time cost: ',time.time()-time_start,'s')
+print('FPS: ',1/(time.time()-time_start))
 pred = pred[0].data.cpu().numpy() * 256   
 skimage.io.imsave('sample_disp.png',pred.astype('uint16'))
