@@ -49,6 +49,7 @@ left_img = preprocess(left_img)
 right_img = preprocess(right_img)
 
 # GPU dry run
+# create dummy tensor
 imgL = torch.from_numpy(np.zeros_like(left_img))
 imgR = torch.from_numpy(np.zeros_like(right_img))
 with torch.no_grad():
