@@ -104,8 +104,8 @@ class BGNet(SubModule):
         coeffs = self.coeffs_disparity_predictor(cost_volume)
         # 分割 coeffs 为 25 个视差层，maxdisp = 25
         list_coeffs = torch.split(coeffs,1,dim = 1)
-        # 生成0-96的索引
-        index = torch.arange(0,97)
+        
+        index = torch.arange(0,97)  # tensor([ 0 ,..., 96])
         index_float = index/4.0
         index_a = torch.floor(index_float)
         index_b = index_a + 1
