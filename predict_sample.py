@@ -60,6 +60,7 @@ with torch.no_grad():
 # start timing
 time_start=time.time()
 # real run, using no_grad() to reduce memory usage and speed up
+# unsqueeze(0) 将在第一个维度（索引为 0）上增加一个维度
 with torch.no_grad():
     pred,_ = model(left_img.unsqueeze(0).cuda(), right_img.unsqueeze(0).cuda())
 # print time cost

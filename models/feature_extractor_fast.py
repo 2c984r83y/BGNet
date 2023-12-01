@@ -135,7 +135,7 @@ class feature_extraction(nn.Module):
         self.deconv3b = Conv2x(96, 64, deconv=True)
         self.deconv2b = Conv2x(64, 48, deconv=True)
         self.deconv1b = Conv2x(48, 32, deconv=True)
-
+    # 下采样？
     def _make_layer(self, block, planes, blocks, stride, pad, dilation):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:

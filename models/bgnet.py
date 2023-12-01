@@ -7,22 +7,26 @@ from __future__ import print_function
 from models.feature_extractor_fast import feature_extraction
 from models.submodules3d import CoeffsPredictor
 from models.submodules2d import HourglassRefinement
-from models.submodules import SubModule,convbn_2d_lrelu,convbn_3d_lrelu,convbn_2d_Tanh
+from models.submodules import SubModule, convbn_2d_lrelu, convbn_3d_lrelu,convbn_2d_Tanh
 from nets.warp import disp_warp
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-import time        
+import time
+# 从双边网格中提取特征
+# 首先对输入的 guidemap 进行了置换和连续化处理，
+# 然后使用 torch.cat 和 unsqueeze 对 guidemap 进行了扩展，
+# 最后使用 F.grid_sample 对双边网格进行了采样
 class Slice(SubModule):
     def __init__(self):
         super(Slice, self).__init__()
     def forward(self, bilateral_grid, wg, hg, guidemap): 
         guidemap = guidemap.permute(0,2,3,1).contiguous() #[B,C,H,W]-> [B,H,W,C]
-        guidemap_guide = torch.cat([wg, hg, guidemap], dim=3).unsqueeze(1) # Nx1xHxWx3
+        guidemap_guide = torch.cat([wg, hg, guidemap], dim=3).unsqueeze(1) # N x 1 x H x W x 3
         coeff = F.grid_sample(bilateral_grid, guidemap_guide,align_corners =False)
         return coeff.squeeze(2) #[B,1,H,W]
 
-      
+# 生成 guide map 
 class GuideNN(SubModule):
     def __init__(self, params=None):
         super(GuideNN, self).__init__()
@@ -32,7 +36,7 @@ class GuideNN(SubModule):
 
     def forward(self, x):
         return self.conv2(self.conv1(x)) 
-        
+# 计算 cost
 def groupwise_correlation(fea1, fea2, num_groups):
     B, C, H, W = fea1.shape
     assert C % num_groups == 0
@@ -41,14 +45,14 @@ def groupwise_correlation(fea1, fea2, num_groups):
     assert cost.shape == (B, num_groups, H, W)
     return cost
 
-
+# 构建 cost volume
 def build_gwc_volume(refimg_fea, targetimg_fea, maxdisp, num_groups):
     B, C, H, W = refimg_fea.shape
     #[B,G,D,H,W]
     volume = refimg_fea.new_zeros([B, num_groups, maxdisp, H, W])
     for i in range(maxdisp):
         if i > 0:
-            volume[:, :, i, :, i:] = groupwise_correlation(refimg_fea[:, :, :, i:], targetimg_fea[:, :, :, :-i],                                                           num_groups)
+            volume[:, :, i, :, i:] = groupwise_correlation(refimg_fea[:, :, :, i:], targetimg_fea[:, :, :, :-i],num_groups)
         else:
             volume[:, :, i, :, :] = groupwise_correlation(refimg_fea, targetimg_fea, num_groups)
     volume = volume.contiguous()
@@ -58,12 +62,13 @@ def correlation(fea1, fea2):
     cost = (fea1 * fea2).mean(dim=1)
     assert cost.shape == (B, H, W)
     return cost
-
+# 视差回归
 def disparity_regression(x, maxdisp):
     assert len(x.shape) == 4
     disp_values = torch.arange(0, maxdisp + 1, dtype=x.dtype, device=x.device)
     disp_values = disp_values.view(1, maxdisp + 1, 1, 1)
     return torch.sum(x * disp_values, 1, keepdim=True)
+
 class BGNet(SubModule):
     def __init__(self):
         super(BGNet, self).__init__()
@@ -88,21 +93,23 @@ class BGNet(SubModule):
     def forward(self, left_input, right_input):         
         left_low_level_features_1,  left_gwc_feature  = self.feature_extraction(left_input)
         _,                          right_gwc_feature = self.feature_extraction(right_input)
-        
+        # 生成 guide map, 1/2 分辨率吗？
         guide = self.guide(left_low_level_features_1) #[B,1,H,W]
         # torch.cuda.synchronize()
         # start = time.time()
+        #  构建 cost volume, refimg_fea, targetimg_fea, maxdisp, num_groups
         cost_volume = build_gwc_volume(left_gwc_feature,right_gwc_feature,25,44)
         cost_volume = self.dres0(cost_volume)
-        #coeffs:[B,D,G,H,W]
+        # coeffs:[B,D,G,H,W] 预测视差的系数？
         coeffs = self.coeffs_disparity_predictor(cost_volume)
-
+        # 分割 coeffs 为 25 个视差层，maxdisp = 25
         list_coeffs = torch.split(coeffs,1,dim = 1)
+        # 生成0-96的索引
         index = torch.arange(0,97)
         index_float = index/4.0
         index_a = torch.floor(index_float)
         index_b = index_a + 1
-        
+        # 限制 index_a, index_b 的范围在 [0,24] 之间
         index_a = torch.clamp(index_a, min=0, max= 24)
         index_b = torch.clamp(index_b, min=0, max= 24)
         
