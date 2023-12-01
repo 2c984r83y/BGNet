@@ -40,11 +40,15 @@ h1 = int(h1)
 w1 = int(w1)
 # left_img = left_img.resize((w1, h1),Image.ANTIALIAS)
 # right_img = right_img.resize((w1, h1),Image.ANTIALIAS)
-left_img = left_img.resize((w1, h1),Image.Resampling.LANCZOS)
+left_img = left_img.resize((w1, h1),Image.Resampling.LANCZOS)   # Resize using Lanczos resampling
 right_img = right_img.resize((w1, h1),Image.Resampling.LANCZOS)
+# 使用 NumPy 库的 `ascontiguousarray()` 函数将图像数据转换为连续的数组。
+# 提高数据处理的效率，因为许多 NumPy 的操作在连续的数组上会更快。
+# `dtype=np.float32` 是 `ascontiguousarray()` 函数的一个参数，它定义了新数组的数据类型。
+# 将图像数据的数据类型转换为 `float32`，这是一种单精度浮点数类型，它可以有效地减少内存的使用，同时保持足够的精度。
 left_img = np.ascontiguousarray(left_img, dtype=np.float32)
 right_img = np.ascontiguousarray(right_img, dtype=np.float32)
-preprocess = get_transform()
+preprocess = get_transform()    # get_transform()函数返回一个转换列表，它将图像转换为 PyTorch 张量
 left_img = preprocess(left_img)
 right_img = preprocess(right_img)
 # GPU dry run
