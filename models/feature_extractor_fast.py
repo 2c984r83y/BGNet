@@ -107,9 +107,21 @@ class feature_extraction(nn.Module):
 
         self.inplanes = 32
 #         self.firstconv = convbn_relu(1, 32, 7, 2, 3, 1)
+
+        # https://zhuanlan.zhihu.com/p/414141336
+        # 前三层采用3 × 3核步长为2、1、1的卷积对输入图像进行下采样。
+        # 然后，跟随4个步长为1、2、2、1的残差层，快速生成1/8分辨率的一元特性。
+
+        # 输入通道数为 1，输出通道数为 32，卷积核大小为 3，步长为 2，填充大小和扩张系数都为 1
+        # 第二个和第三个模块的输入通道数和输出通道数都为 32，卷积核大小、步长、填充大小和扩张系数都为 1
+        # 数据首先通过第一个模块进行卷积、批量归一化和 ReLU 激活操作，
+        # 然后通过第二个模块进行同样的操作，最后通过第三个模块进行同样的操作
+        # self.firstconv 实现了对输入数据的连续三次卷积、批量归一化和 ReLU 激活操作
         self.firstconv = nn.Sequential(convbn_relu(1, 32, 3, 2, 1, 1),
                                convbn_relu(32, 32, 3, 1, 1, 1),
                                convbn_relu(32, 32, 3, 1, 1, 1))
+        # 创建一个包含一个 BasicBlock 类型网络层的序列模块，并将其赋值给 self.layer1
+        # 这个 BasicBlock 的输出通道数为 32，步长为 1，填充大小为 1，扩张系数为 1
         self.layer1 = self._make_layer(BasicBlock, 32, 1, 1, 1, 1)
         self.layer2 = self._make_layer(BasicBlock, 64, 1, 2, 1, 1)
         self.layer3 = self._make_layer(BasicBlock, 128, 1, 2, 1, 1)
@@ -136,6 +148,7 @@ class feature_extraction(nn.Module):
         self.deconv2b = Conv2x(64, 48, deconv=True)
         self.deconv1b = Conv2x(48, 32, deconv=True)
     # 下采样？
+    # dilation 参数控制了卷积核中元素之间的间距，即扩张系数
     def _make_layer(self, block, planes, blocks, stride, pad, dilation):
         downsample = None
         if stride != 1 or self.inplanes != planes * block.expansion:

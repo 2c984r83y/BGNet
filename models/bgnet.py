@@ -26,7 +26,7 @@ class Slice(SubModule):
         coeff = F.grid_sample(bilateral_grid, guidemap_guide,align_corners =False)
         return coeff.squeeze(2) #[B,1,H,W]
 
-# 生成 guide map 
+# a 3D convolution of 3 ×3×3
 class GuideNN(SubModule):
     def __init__(self, params=None):
         super(GuideNN, self).__init__()
@@ -93,14 +93,16 @@ class BGNet(SubModule):
     def forward(self, left_input, right_input):         
         left_low_level_features_1,  left_gwc_feature  = self.feature_extraction(left_input)
         _,                          right_gwc_feature = self.feature_extraction(right_input)
-        # 生成 guide map, 1/2 分辨率吗？
+        # 对 1/8 分辨率的 cost volume left_low_level_features_1
+        # GuideNN(), a 3D convolution of 3 ×3×3
+        # Batch size/通道数/高度/宽度
         guide = self.guide(left_low_level_features_1) #[B,1,H,W]
         # torch.cuda.synchronize()
         # start = time.time()
         #  构建 cost volume, refimg_fea, targetimg_fea, maxdisp, num_groups
         cost_volume = build_gwc_volume(left_gwc_feature,right_gwc_feature,25,44)
         cost_volume = self.dres0(cost_volume)
-        # coeffs:[B,D,G,H,W] 预测视差的系数？
+        # coeffs:[B,D,G,H,W] 双边网格 ？
         coeffs = self.coeffs_disparity_predictor(cost_volume)
         # 分割 coeffs 为 25 个视差层，maxdisp = 25
         list_coeffs = torch.split(coeffs,1,dim = 1)
@@ -118,6 +120,7 @@ class BGNet(SubModule):
 
         list_float = []  
         device = list_coeffs[0].get_device()
+        # reshape wa, wb to (1,n,1,1)
         wa  = wa.view(1,-1,1,1)
         wb  = wb.view(1,-1,1,1)
         wa = wa.to(device)
@@ -147,11 +150,15 @@ class BGNet(SubModule):
             inx_b  = min(inx_b,24)
             slice_dict_a.append(slice_dict[inx_a])
             slice_dict_b.append(slice_dict[inx_b])
-            
+        
+        # 把0-24的视差范围扩展到0-96，总视差范围应该是192，所以这是一半的特征。不过他的扩展方式很奇怪，给我的感觉就是把25个视差维度特征混合了一下，拼成了97维    
         final_cost_volume = wa * torch.cat(slice_dict_a,dim = 1) + wb * torch.cat(slice_dict_b,dim = 1)
         slice = self.softmax(final_cost_volume)
         disparity_samples = torch.arange(0, 97, dtype=slice.dtype, device=slice.device).view(1, 97, 1, 1)
+        # 把经过代价聚合过程的每个视差等级的feature maps通道压缩成1，每个视差等级只有一个feature map,softmax为每个视差等级都计算一个概率，
+        # 每个像素的视差d乘以改层视差等级的概率，累加得出最后该像素的视差值，从而生成视差图
         
+        # 最终在[H/2,W/2]的尺寸上预测了0-96的视差概率分布，得到了每个点的预测视差half_disp，然后对2*half_disp进行双线性插值，得到[H,W]尺寸上的每点预测视差
         disparity_samples = disparity_samples.repeat(slice.size()[0],1,slice.size()[2],slice.size()[3])
         half_disp = torch.sum(disparity_samples * slice,dim = 1).unsqueeze(1)
         out2 = F.interpolate(half_disp * 2.0, scale_factor=(2.0, 2.0),

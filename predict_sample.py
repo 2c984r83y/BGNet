@@ -27,10 +27,10 @@ model = BGNet_Plus().cuda()
 checkpoint = torch.load('models/Sceneflow-IRS-BGNet-Plus.pth',map_location=lambda storage, loc: storage)
 model.load_state_dict(checkpoint) 
 model.eval()
-# left_img1 = Image.open('sample/im0.png').convert('L')
-# right_img = Image.open('sample/im1.png').convert('L')
-left_img = Image.open('/disk2/users/M22_zhaoqinghao/PSMNet/testing/desc_l_1.png').convert('L')
-right_img = Image.open('/disk2/users/M22_zhaoqinghao/PSMNet/testing/desc_r_1.png').convert('L')
+left_img = Image.open('sample/im0.png').convert('L')
+right_img = Image.open('sample/im1.png').convert('L')
+# left_img = Image.open('/disk2/users/M22_zhaoqinghao/PSMNet/testing/desc_l_1.png').convert('L')
+# right_img = Image.open('/disk2/users/M22_zhaoqinghao/PSMNet/testing/desc_r_1.png').convert('L')
 w, h = left_img.size
 h1 = h % 64
 w1 = w % 64
