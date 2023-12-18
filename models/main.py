@@ -1,6 +1,9 @@
 from __future__ import print_function, division
 import argparse
 import os
+import random
+import torch
+import torch.nn as nn
 import torch.backends.cudnn as cudnn
 from torch.utils.data import DataLoader
 import torch.utils.data
@@ -11,10 +14,8 @@ import numpy as np
 import time
 from datasets import __datasets__
 import gc
-import skimage
-import skimage.io
-import skimage.transform
-from PIL import Image
+from dataloader import listflowfile as lt
+from dataloader import SecenFlowLoader as DA
 from models.bgnet import BGNet
 from models.bgnet_plus import BGNet_Plus
 parser = argparse.ArgumentParser(description='BGNet')
