@@ -31,17 +31,15 @@ from datasets.data_io import get_transform
 parser = argparse.ArgumentParser(description='BGNet')
 parser.add_argument('--maxdisp', type=int ,default=192,
                     help='maxium disparity')
-parser.add_argument('--model', default='BGNet',
+parser.add_argument('--model', default='BGNet_Plus',
                     help='select model')
 parser.add_argument('--datatype', default='2015',
                     help='datapath')
-# parser.add_argument('--datapath', default='/disk2/users/M22_zhaoqinghao/dataset/KITTI_2015/training/',
-#                     help='datapath')
 parser.add_argument('--datapath', default='/root/KITTI_2015/training',
                     help='datapath')
 parser.add_argument('--epochs', type=int, default=300,
                     help='number of epochs to train')
-parser.add_argument('--loadmodel', default='./models/Sceneflow-IRS-BGNet.pth',
+parser.add_argument('--loadmodel', default='./models/kitti_15_BGNet_Plus.pth',
                     help='load model')
 parser.add_argument('--savemodel', default='./',
                     help='save model')
@@ -81,7 +79,7 @@ if args.cuda:
     model.cuda()
 
 if args.loadmodel is not None:
-    state_dict = torch.load(args.loadmodel)
+    state_dict = torch.load(args.loadmodel, map_location=torch.device('cuda' if args.cuda else 'cpu'))
     model.load_state_dict(state_dict.get('state_dict', {}), strict=False)
 
 print('Number of model parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
@@ -162,18 +160,16 @@ def main():
         total_train_loss = 0
         total_test_loss = 0
         adjust_learning_rate(optimizer,epoch)
-        
             ## training ##
         for batch_idx, (imgL_crop, imgR_crop, disp_crop_L) in enumerate(TrainImgLoader):
-            start_time = time.time() 
-
+            start_time = time.time()
             loss = train(imgL_crop,imgR_crop, disp_crop_L)
         print('Iter %d training loss = %.3f , time = %.2f' %(batch_idx, loss, time.time() - start_time))
         total_train_loss += loss
     print('epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TrainImgLoader)))
     
-    #TODO:fix this
     ## Test ##
+    #TODO:fix this
     # for batch_idx, (imgL, imgR, disp_L) in enumerate(TestImgLoader):
     #     test_loss = test(imgL,imgR, disp_L)
     #     print('Iter %d 3-px Accuracy in val = %.3f' %(batch_idx, test_loss*100))
