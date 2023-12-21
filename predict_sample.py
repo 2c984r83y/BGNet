@@ -22,9 +22,10 @@ from models.bgnet import BGNet
 from models.bgnet_plus import BGNet_Plus
 import time
 
-model = BGNet_Plus().cuda()
-
-checkpoint = torch.load('models/Sceneflow-IRS-BGNet-Plus.pth',map_location=lambda storage, loc: storage)
+# model = BGNet_Plus().cuda()
+model = BGNet().cuda()
+# checkpoint = torch.load('./models/Sceneflow-IRS-BGNet.pth',map_location=lambda storage, loc: storage)
+checkpoint = torch.load('./models/Sceneflow-IRS-BGNet.pth',map_location=lambda storage, loc: storage)
 model.load_state_dict(checkpoint) 
 model.eval()
 left_img = Image.open('sample/im0.png').convert('L')
