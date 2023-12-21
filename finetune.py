@@ -170,17 +170,17 @@ def main():
     
     ## Test ##
     #TODO:fix this
-#     for batch_idx, (imgL, imgR, disp_L) in enumerate(TestImgLoader):
-#         test_loss = test(imgL,imgR, disp_L)
-#         print('Iter %d 3-px Accuracy in val = %.3f' %(batch_idx, test_loss*100))
-#         total_test_loss += test_loss
+    # for batch_idx, (imgL, imgR, disp_L) in enumerate(TestImgLoader):
+    #     test_loss = test(imgL,imgR, disp_L)
+    #     print('Iter %d 3-px Accuracy in val = %.3f' %(batch_idx, test_loss*100))
+    #     total_test_loss += test_loss
 
 
-#     print('epoch %d total 3-px Accuracy in val = %.3f' %(epoch, total_test_loss/len(TestImgLoader)*100))
-#     if total_test_loss/len(TestImgLoader)*100 > max_acc:
-#         max_acc = total_test_loss/len(TestImgLoader)*100
-#         max_epo = epoch
-#     print('MAX epoch %d total test Accuracy = %.3f' %(max_epo, max_acc))
+    # print('epoch %d total 3-px Accuracy in val = %.3f' %(epoch, total_test_loss/len(TestImgLoader)*100))
+    # if total_test_loss/len(TestImgLoader)*100 > max_acc:
+    #     max_acc = total_test_loss/len(TestImgLoader)*100
+    #     max_epo = epoch
+    # print('MAX epoch %d total test Accuracy = %.3f' %(max_epo, max_acc))
 
     # save as pth
     savefilename = args.savemodel+'finetune_'+str(epoch)+'.pth'
