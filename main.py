@@ -21,15 +21,17 @@ from models.bgnet_plus import BGNet_Plus
 parser = argparse.ArgumentParser(description='BGNet')
 parser.add_argument('--maxdisp', type=int ,default=192,
                     help='maxium disparity')
-parser.add_argument('--model', default='bgnet', help='select a model structure')
-parser.add_argument('--dataset', required=True, help='dataset name', choices=__datasets__.keys())
-parser.add_argument('--datapath', default='/disk2/users/M22_zhaoqinghao/dataset/sceneflow/',
+parser.add_argument('--model', default='BGNet',
+                    help='select model')
+parser.add_argument('--datatype', default='2015',
                     help='datapath')
-parser.add_argument('--testlist', required=True, help='testing list')
-parser.add_argument('--resume', required=True, help='the directory to save logs and checkpoints')
-parser.add_argument('--epochs', type=int, default=10,
+# parser.add_argument('--datapath', default='/disk2/users/M22_zhaoqinghao/dataset/KITTI_2015/training/',
+#                     help='datapath')
+parser.add_argument('--datapath', default='/root/KITTI_2015/training',
+                    help='datapath')
+parser.add_argument('--epochs', type=int, default=300,
                     help='number of epochs to train')
-parser.add_argument('--loadmodel', default= None,
+parser.add_argument('--loadmodel', default='./models/Sceneflow-IRS-BGNet.pth',
                     help='load model')
 parser.add_argument('--savemodel', default='./',
                     help='save model')
@@ -40,12 +42,16 @@ parser.add_argument('--seed', type=int, default=1, metavar='S',
 
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
-
 torch.manual_seed(args.seed)
 if args.cuda:
     torch.cuda.manual_seed(args.seed)
 
-all_left_img, all_right_img, all_left_disp, test_left_img, test_right_img, test_left_disp = lt.dataloader(args.datapath)
+if args.datatype == '2015':
+   from dataloader import KITTIloader2015 as ls
+elif args.datatype == '2012':
+   from dataloader import KITTIloader2012 as ls
+
+all_left_img, all_right_img, all_left_disp, test_left_img, test_right_img, test_left_disp = ls.dataloader(args.datapath)
 
 TrainImgLoader = torch.utils.data.DataLoader(
          DA.myImageFloder(all_left_img,all_right_img,all_left_disp, True), 
@@ -54,16 +60,15 @@ TrainImgLoader = torch.utils.data.DataLoader(
 TestImgLoader = torch.utils.data.DataLoader(
          DA.myImageFloder(test_left_img,test_right_img,test_left_disp, False), 
          batch_size= 8, shuffle= False, num_workers= 4, drop_last=False)
-if(args.model == 'bgnet'):
-    model = BGNet().cuda()
-elif(args.model == 'bgnet_plus'):
-    model = BGNet_Plus().cuda()
+
+model = BGNet().cuda()
 
 
-if args.loadmodel is not None:
-    print('Load pretrained model')
-    pretrain_dict = torch.load(args.loadmodel)
-    model.load_state_dict(pretrain_dict['state_dict'])
+
+# if args.loadmodel is not None:
+#     print('Load pretrained model')
+#     pretrain_dict = torch.load(args.loadmodel)
+#     model.load_state_dict(pretrain_dict['state_dict'])
 
 print('Number of model parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
     
