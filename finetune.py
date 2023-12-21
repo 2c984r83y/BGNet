@@ -19,7 +19,12 @@ import math
 from dataloader import KITTIloader2015 as ls
 from dataloader import KITTILoader as DA
 import copy
+from models.bgnet import BGNet
+from models.bgnet_plus import BGNet_Plus
+import sys
+sys.path.append('/root/BGNet/models')
 from models import *
+
 
 parser = argparse.ArgumentParser(description='BGNet')
 parser.add_argument('--maxdisp', type=int ,default=192,
@@ -28,7 +33,9 @@ parser.add_argument('--model', default='BGNet',
                     help='select model')
 parser.add_argument('--datatype', default='2015',
                     help='datapath')
-parser.add_argument('--datapath', default='/disk2/users/M22_zhaoqinghao/dataset/KITTI_2015/training/',
+# parser.add_argument('--datapath', default='/disk2/users/M22_zhaoqinghao/dataset/KITTI_2015/training/',
+#                     help='datapath')
+parser.add_argument('--datapath', default='/root/KITTI_2015/training',
                     help='datapath')
 parser.add_argument('--epochs', type=int, default=300,
                     help='number of epochs to train')
@@ -62,10 +69,11 @@ TestImgLoader = torch.utils.data.DataLoader(
          batch_size= 8, shuffle= False, num_workers= 4, drop_last=False)
 
 
-if(args.model == 'bgnet'):
-    model = BGNet().cuda()
-elif(args.model == 'bgnet_plus'):
-    model = BGNet_Plus().cuda()
+# if(args.model == 'bgnet'):
+#     model = BGNet().cuda()
+# elif(args.model == 'bgnet_plus'):
+#     model = BGNet_Plus().cuda()
+model = BGNet().cuda()
 
 
 if args.cuda:
@@ -73,7 +81,7 @@ if args.cuda:
 
 if args.loadmodel is not None:
     state_dict = torch.load(args.loadmodel)
-    model.load_state_dict(state_dict['state_dict'])
+    # model.load_state_dict(state_dict['state_dict'], strict=False)
 
 print('Number of model parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
 
