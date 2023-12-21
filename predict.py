@@ -19,12 +19,12 @@ from PIL import Image
 from models.bgnet import BGNet
 from models.bgnet_plus import BGNet_Plus
 parser = argparse.ArgumentParser(description='BGNet')
-parser.add_argument('--model', default='bgnet', help='select a model structure')
-parser.add_argument('--dataset', required=True, help='dataset name', choices=__datasets__.keys())
-parser.add_argument('--datapath', required=True, help='data path')
-parser.add_argument('--savepath', required=True, help='save path')
-parser.add_argument('--testlist', required=True, help='testing list')
-parser.add_argument('--resume', required=True, help='the directory to save logs and checkpoints')
+parser.add_argument('--model', default='bgnet_plus', help='select a model structure')
+parser.add_argument('--dataset', default='kitti', help='dataset name', choices=__datasets__.keys())
+parser.add_argument('--datapath', default='/root/KITTI_2015/',help='datapath')
+parser.add_argument('--savepath', default='/root/BGNet/output/', help='save path')
+parser.add_argument('--testlist', default='/root/BGNet/filenames/kitti15_train.txt', help='testing list')
+parser.add_argument('--resume', default='/root/BGNet/models/kitti_15_BGNet_Plus.pth', help='the directory to save logs and checkpoints')
 
 args = parser.parse_args()
 datapath = args.datapath
@@ -67,4 +67,3 @@ for batch_idx, sample in enumerate(TestImgLoader):
     temp = pred[top_pad:, :-right_pad]
     os.makedirs(args.savepath,exist_ok=True)
     skimage.io.imsave(args.savepath + '{:0>6d}'.format(batch_idx) +'_10.png',temp.astype('uint16'))
-    

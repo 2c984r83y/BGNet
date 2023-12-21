@@ -1,6 +1,18 @@
-from __future__ import print_function
+from __future__ import print_function, division
 import argparse
 import os
+import torch.backends.cudnn as cudnn
+from torch.utils.data import DataLoader
+import torch.utils.data
+import time
+from datasets import __datasets__
+import gc
+import skimage
+import skimage.io
+import skimage.transform
+from PIL import Image
+from models.bgnet import BGNet
+from models.bgnet_plus import BGNet_Plus
 import random
 import torch
 import torch.nn as nn
@@ -14,32 +26,25 @@ import skimage
 import skimage.io
 import skimage.transform
 import numpy as np
-import time
 import math
-from dataloader import KITTIloader2015 as ls
-from dataloader import KITTILoader as DA
 import copy
-from models.bgnet import BGNet
-from models.bgnet_plus import BGNet_Plus
+
 import sys
 sys.path.append('/root/BGNet/models')
 from models import *
 from PIL import Image
 from datasets.data_io import get_transform
 
-
 parser = argparse.ArgumentParser(description='BGNet')
-parser.add_argument('--maxdisp', type=int ,default=192,
-                    help='maxium disparity')
-parser.add_argument('--model', default='BGNet_Plus',
-                    help='select model')
-parser.add_argument('--datatype', default='2015',
-                    help='datapath')
-parser.add_argument('--datapath', default='/root/KITTI_2015/training',
-                    help='datapath')
-parser.add_argument('--epochs', type=int, default=300,
+parser.add_argument('--model', default='bgnet_plus', help='select a model structure')
+parser.add_argument('--dataset', default='kitti', help='dataset name', choices=__datasets__.keys())
+parser.add_argument('--datapath', default='/root/KITTI_2015/',help='datapath')
+parser.add_argument('--savepath', default='/root/BGNet/output/', help='save path')
+parser.add_argument('--testlist', default='/root/BGNet/filenames/kitti15_train.txt', help='testing list')
+# parser.add_argument('--resume', default='/root/BGNet/models/kitti_15_BGNet_Plus.pth', help='the directory to save logs and checkpoints')
+parser.add_argument('--epochs', type=int, default=3,
                     help='number of epochs to train')
-parser.add_argument('--loadmodel', default='./models/kitti_15_BGNet_Plus.pth',
+parser.add_argument('--loadmodel', default= '/root/BGNet/models/kitti_15_BGNet_Plus.pth',
                     help='load model')
 parser.add_argument('--savemodel', default='./',
                     help='save model')
@@ -53,93 +58,70 @@ torch.manual_seed(args.seed)
 if args.cuda:
     torch.cuda.manual_seed(args.seed)
 
-if args.datatype == '2015':
-   from dataloader import KITTIloader2015 as ls
-elif args.datatype == '2012':
-   from dataloader import KITTIloader2012 as ls
+datapath = args.datapath
+StereoDataset = __datasets__[args.dataset]
+kitti_real_test = args.testlist
+kitti_real_test_dataset = StereoDataset(datapath, kitti_real_test, False)
+TestImgLoader = DataLoader(kitti_real_test_dataset, batch_size= 1, shuffle=False, num_workers=1, drop_last=False)
 
-all_left_img, all_right_img, all_left_disp, test_left_img, test_right_img, test_left_disp = ls.dataloader(args.datapath)
-
-TrainImgLoader = torch.utils.data.DataLoader(
-         DA.myImageFloder(all_left_img,all_right_img,all_left_disp, True), 
-         batch_size= 12, shuffle= True, num_workers= 8, drop_last=False)
-
-TestImgLoader = torch.utils.data.DataLoader(
-         DA.myImageFloder(test_left_img,test_right_img,test_left_disp, False), 
-         batch_size= 8, shuffle= False, num_workers= 4, drop_last=False)
-
-
-if(args.model == 'BGNet'):
+if(args.model == 'bgnet'):
     model = BGNet().cuda()
-elif(args.model == 'BGNet_Plus'):
+elif(args.model == 'bgnet_plus'):
     model = BGNet_Plus().cuda()
-
-
+# else:
+    # print('wrong model')
+    # return -1
+sub_name = None    
+if(args.dataset == 'kitti_12'):
+    sub_name = 'testing/colored_0/'
+elif(args.dataset == 'kitti'):
+    sub_name = 'testing/image_2/'
+# else:
+    # print('wrong dataset')
+    # return -1
+    
 if args.cuda:
     model.cuda()
 
 if args.loadmodel is not None:
     state_dict = torch.load(args.loadmodel, map_location=torch.device('cuda' if args.cuda else 'cpu'))
     model.load_state_dict(state_dict.get('state_dict', {}), strict=False)
-
 print('Number of model parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
 
 optimizer = optim.Adam(model.parameters(), lr=0.1, betas=(0.9, 0.999))
 
+# checkpoint = torch.load(args.resume,map_location=lambda storage, loc: storage)
+# model.load_state_dict(checkpoint) 
+
 def train(imgL,imgR,disp_L):
     model.train()
-    imgL_gray = Variable(torch.FloatTensor(imgL).mean(dim=1, keepdim=True))
-    imgR_gray = Variable(torch.FloatTensor(imgR).mean(dim=1, keepdim=True))
-    disp_L = Variable(torch.FloatTensor(disp_L))
-
+    
     if args.cuda:
-        imgL_gray, imgR_gray, disp_true = imgL_gray.cuda(), imgR_gray.cuda(), disp_L.cuda()
+        imgL, imgR, disp_true = imgL.cuda(), imgR.cuda(), disp_L.cuda()
 
-    #---------
-    mask = (disp_true > 0)
-    mask.detach_()
-    #----
 
     optimizer.zero_grad()
 
-    output,_ = model(imgL_gray,imgR_gray)
-    # output = torch.squeeze(output,1)
+    output,_ = model(imgL,imgR)
+
+    disp_true = torch.squeeze(disp_true,0)
+    disp_true = torch.squeeze(disp_true,0)
+    output = torch.squeeze(output,0)
+    # print(disp_true.shape)
+    # print(output.shape)
+        #---------
+    mask = (disp_true > 0)
+    mask.detach_()
+    #----
+    
     loss = F.smooth_l1_loss(output[mask], disp_true[mask], size_average=True)
+    # loss = F.smooth_l1_loss(output, disp_true, size_average=True)
 
     loss.backward()
     optimizer.step()
 
     # return loss.data[0]
     return loss.data
-
-def test(imgL,imgR,disp_true):
-    model.eval()
-    imgL_gray = Variable(torch.FloatTensor(imgL).mean(dim=1, keepdim=True))
-    imgR_gray = Variable(torch.FloatTensor(imgR).mean(dim=1, keepdim=True))
-    
-    if args.cuda:
-        imgL_gray, imgR_gray = imgL_gray.cuda(), imgR_gray.cuda()
-    with torch.no_grad():
-        output,_ = model(imgL_gray.unsqueeze(0).cuda(), imgR_gray.unsqueeze(0).cuda())
-    # fix the bug of output3 format
-    # https://github.com/JiaRenChang/PSMNet/issues/226    
-    # https://github.com/JiaRenChang/PSMNet/issues/230
-    # https://github.com/JiaRenChang/PSMNet/issues/218
-    
-    # output = torch.squeeze(output,1)
-    
-    pred_disp = output.data.cpu()
-
-    #computing 3-px error#
-    true_disp = copy.deepcopy(disp_true)
-    index = np.argwhere(true_disp > 0)
-    disp_true[index[0][:], index[1][:], index[2][:]] = np.abs(
-        true_disp[index[0][:], index[1][:], index[2][:]] - pred_disp[index[0][:], index[1][:], index[2][:]])
-    correct = (disp_true[index[0][:], index[1][:], index[2][:]] < 3) | (
-                disp_true[index[0][:], index[1][:], index[2][:]] < true_disp[
-            index[0][:], index[1][:], index[2][:]] * 0.05)
-    torch.cuda.empty_cache()
-    return (float(torch.sum(correct))/float(len(index[0])))
 
 def adjust_learning_rate(optimizer, epoch):
     if epoch <= 200:
@@ -150,7 +132,6 @@ def adjust_learning_rate(optimizer, epoch):
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
-
 def main():
     max_acc=0
     max_epo=0
@@ -160,35 +141,40 @@ def main():
         total_train_loss = 0
         total_test_loss = 0
         adjust_learning_rate(optimizer,epoch)
-            ## training ##
-        for batch_idx, (imgL_crop, imgR_crop, disp_crop_L) in enumerate(TrainImgLoader):
+        ## training ##
+        for batch_idx, sample in enumerate(TestImgLoader):
             start_time = time.time()
-            loss = train(imgL_crop,imgR_crop, disp_crop_L)
-        print('Iter %d training loss = %.3f , time = %.2f' %(batch_idx, loss, time.time() - start_time))
+            imgL, imgR, disp_L= sample['left'], sample['right'], sample['disparity']
+            imgL = imgL.cuda()
+            imgR = imgR.cuda()
+            disp_L = disp_L.cuda()
+            loss = train(imgL, imgR, disp_L)
+            print('Iter %d training loss = %.3f , time = %.2f' %(batch_idx, loss, time.time() - start_time))
         total_train_loss += loss
-    print('epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TrainImgLoader)))
-    
+    print('epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TestImgLoader)))
+
     ## Test ##
     #TODO:fix this
-    # for batch_idx, (imgL, imgR, disp_L) in enumerate(TestImgLoader):
-    #     test_loss = test(imgL,imgR, disp_L)
-    #     print('Iter %d 3-px Accuracy in val = %.3f' %(batch_idx, test_loss*100))
-    #     total_test_loss += test_loss
+#     for batch_idx, (imgL, imgR, disp_L) in enumerate(TestImgLoader):
+#         test_loss = test(imgL,imgR, disp_L)
+#         print('Iter %d 3-px Accuracy in val = %.3f' %(batch_idx, test_loss*100))
+#         total_test_loss += test_loss
 
 
-    # print('epoch %d total 3-px Accuracy in val = %.3f' %(epoch, total_test_loss/len(TestImgLoader)*100))
-    # if total_test_loss/len(TestImgLoader)*100 > max_acc:
-    #     max_acc = total_test_loss/len(TestImgLoader)*100
-    #     max_epo = epoch
-    # print('MAX epoch %d total test Accuracy = %.3f' %(max_epo, max_acc))
+#     print('epoch %d total 3-px Accuracy in val = %.3f' %(epoch, total_test_loss/len(TestImgLoader)*100))
+#     if total_test_loss/len(TestImgLoader)*100 > max_acc:
+#         max_acc = total_test_loss/len(TestImgLoader)*100
+#         max_epo = epoch
+#     print('MAX epoch %d total test Accuracy = %.3f' %(max_epo, max_acc))
 
     # save as pth
     savefilename = args.savemodel+'finetune_'+str(epoch)+'.pth'
     torch.save(model.state_dict(), savefilename)
     print('full finetune time = %.2f HR' %((time.time() - start_full_time)/3600))
-    print(max_epo)
-    print(max_acc)
+    # print(max_epo)
+    # print(max_acc)
 
 
 if __name__ == '__main__':
    main()
+
