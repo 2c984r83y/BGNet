@@ -24,6 +24,8 @@ from models.bgnet_plus import BGNet_Plus
 import sys
 sys.path.append('/root/BGNet/models')
 from models import *
+from PIL import Image
+from datasets.data_io import get_transform
 
 
 parser = argparse.ArgumentParser(description='BGNet')
@@ -69,11 +71,10 @@ TestImgLoader = torch.utils.data.DataLoader(
          batch_size= 8, shuffle= False, num_workers= 4, drop_last=False)
 
 
-# if(args.model == 'bgnet'):
-#     model = BGNet().cuda()
-# elif(args.model == 'bgnet_plus'):
-#     model = BGNet_Plus().cuda()
-model = BGNet().cuda()
+if(args.model == 'BGNet'):
+    model = BGNet().cuda()
+elif(args.model == 'BGNet_Plus'):
+    model = BGNet_Plus().cuda()
 
 
 if args.cuda:
@@ -81,67 +82,66 @@ if args.cuda:
 
 if args.loadmodel is not None:
     state_dict = torch.load(args.loadmodel)
-    # model.load_state_dict(state_dict['state_dict'], strict=False)
+    model.load_state_dict(state_dict.get('state_dict', {}), strict=False)
 
 print('Number of model parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
 
 optimizer = optim.Adam(model.parameters(), lr=0.1, betas=(0.9, 0.999))
 
 def train(imgL,imgR,disp_L):
-        model.train()
-        imgL   = Variable(torch.FloatTensor(imgL))
-        imgR   = Variable(torch.FloatTensor(imgR))   
-        disp_L = Variable(torch.FloatTensor(disp_L))
+    model.train()
+    imgL_gray = Variable(torch.FloatTensor(imgL).mean(dim=1, keepdim=True))
+    imgR_gray = Variable(torch.FloatTensor(imgR).mean(dim=1, keepdim=True))
+    disp_L = Variable(torch.FloatTensor(disp_L))
 
-        if args.cuda:
-            imgL, imgR, disp_true = imgL.cuda(), imgR.cuda(), disp_L.cuda()
+    if args.cuda:
+        imgL_gray, imgR_gray, disp_true = imgL_gray.cuda(), imgR_gray.cuda(), disp_L.cuda()
 
-        #---------
-        mask = (disp_true > 0)
-        mask.detach_()
-        #----
+    #---------
+    mask = (disp_true > 0)
+    mask.detach_()
+    #----
 
-        optimizer.zero_grad()
-        
+    optimizer.zero_grad()
 
-        output,_ = model(imgL,imgR)
-        # output = torch.squeeze(output,1)
-        loss = F.smooth_l1_loss(output[mask], disp_true[mask], size_average=True)
+    output,_ = model(imgL_gray,imgR_gray)
+    # output = torch.squeeze(output,1)
+    loss = F.smooth_l1_loss(output[mask], disp_true[mask], size_average=True)
 
-        loss.backward()
-        optimizer.step()
+    loss.backward()
+    optimizer.step()
 
-        # return loss.data[0]
-        return loss.data
+    # return loss.data[0]
+    return loss.data
 
 def test(imgL,imgR,disp_true):
-        model.eval()
-        imgL   = Variable(torch.FloatTensor(imgL))
-        imgR   = Variable(torch.FloatTensor(imgR))   
-        if args.cuda:
-            imgL, imgR = imgL.cuda(), imgR.cuda()
+    model.eval()
+    imgL_gray = Variable(torch.FloatTensor(imgL).mean(dim=1, keepdim=True))
+    imgR_gray = Variable(torch.FloatTensor(imgR).mean(dim=1, keepdim=True))
+    
+    if args.cuda:
+        imgL_gray, imgR_gray = imgL_gray.cuda(), imgR_gray.cuda()
+    with torch.no_grad():
+        output,_ = model(imgL_gray.unsqueeze(0).cuda(), imgR_gray.unsqueeze(0).cuda())
+    # fix the bug of output3 format
+    # https://github.com/JiaRenChang/PSMNet/issues/226    
+    # https://github.com/JiaRenChang/PSMNet/issues/230
+    # https://github.com/JiaRenChang/PSMNet/issues/218
+    
+    # output = torch.squeeze(output,1)
+    
+    pred_disp = output.data.cpu()
 
-        with torch.no_grad():
-            output,_ = model(imgL,imgR)
-        # fix the bug of output3 format
-        # https://github.com/JiaRenChang/PSMNet/issues/226    
-        # https://github.com/JiaRenChang/PSMNet/issues/230
-        # https://github.com/JiaRenChang/PSMNet/issues/218
-        
-        # output = torch.squeeze(output,1)
-        
-        pred_disp = output.data.cpu()
-
-        #computing 3-px error#
-        true_disp = copy.deepcopy(disp_true)
-        index = np.argwhere(true_disp > 0)
-        disp_true[index[0][:], index[1][:], index[2][:]] = np.abs(
-            true_disp[index[0][:], index[1][:], index[2][:]] - pred_disp[index[0][:], index[1][:], index[2][:]])
-        correct = (disp_true[index[0][:], index[1][:], index[2][:]] < 3) | (
-                    disp_true[index[0][:], index[1][:], index[2][:]] < true_disp[
-                index[0][:], index[1][:], index[2][:]] * 0.05)
-        torch.cuda.empty_cache()
-        return (float(torch.sum(correct))/float(len(index[0])))
+    #computing 3-px error#
+    true_disp = copy.deepcopy(disp_true)
+    index = np.argwhere(true_disp > 0)
+    disp_true[index[0][:], index[1][:], index[2][:]] = np.abs(
+        true_disp[index[0][:], index[1][:], index[2][:]] - pred_disp[index[0][:], index[1][:], index[2][:]])
+    correct = (disp_true[index[0][:], index[1][:], index[2][:]] < 3) | (
+                disp_true[index[0][:], index[1][:], index[2][:]] < true_disp[
+            index[0][:], index[1][:], index[2][:]] * 0.05)
+    torch.cuda.empty_cache()
+    return (float(torch.sum(correct))/float(len(index[0])))
 
 def adjust_learning_rate(optimizer, epoch):
     if epoch <= 200:
@@ -172,29 +172,23 @@ def main():
         total_train_loss += loss
     print('epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TrainImgLoader)))
     
+    #TODO:fix this
     ## Test ##
+#     for batch_idx, (imgL, imgR, disp_L) in enumerate(TestImgLoader):
+#         test_loss = test(imgL,imgR, disp_L)
+#         print('Iter %d 3-px Accuracy in val = %.3f' %(batch_idx, test_loss*100))
+#         total_test_loss += test_loss
 
-    for batch_idx, (imgL, imgR, disp_L) in enumerate(TestImgLoader):
-        test_loss = test(imgL,imgR, disp_L)
-        print('Iter %d 3-px Accuracy in val = %.3f' %(batch_idx, test_loss*100))
-        total_test_loss += test_loss
 
+#     print('epoch %d total 3-px Accuracy in val = %.3f' %(epoch, total_test_loss/len(TestImgLoader)*100))
+#     if total_test_loss/len(TestImgLoader)*100 > max_acc:
+#         max_acc = total_test_loss/len(TestImgLoader)*100
+#         max_epo = epoch
+#     print('MAX epoch %d total test Accuracy = %.3f' %(max_epo, max_acc))
 
-    print('epoch %d total 3-px Accuracy in val = %.3f' %(epoch, total_test_loss/len(TestImgLoader)*100))
-    if total_test_loss/len(TestImgLoader)*100 > max_acc:
-        max_acc = total_test_loss/len(TestImgLoader)*100
-        max_epo = epoch
-    print('MAX epoch %d total test Accuracy = %.3f' %(max_epo, max_acc))
-
-    #SAVE
-    savefilename = args.savemodel+'finetune_'+str(epoch)+'.tar'
-    torch.save({
-            'epoch': epoch,
-            'state_dict': model.state_dict(),
-            'train_loss': total_train_loss/len(TrainImgLoader),
-            # 'Accuracy': total_test_loss/len(TestImgLoader)*100,
-        }, savefilename)
-    
+    # save as pth
+    savefilename = args.savemodel+'finetune_'+str(epoch)+'.pth'
+    torch.save(model.state_dict(), savefilename)
     print('full finetune time = %.2f HR' %((time.time() - start_full_time)/3600))
     print(max_epo)
     print(max_acc)
