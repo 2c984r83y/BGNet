@@ -28,7 +28,6 @@ import skimage.transform
 import numpy as np
 import math
 import copy
-
 import sys
 sys.path.append('/root/BGNet/models')
 from models import *
@@ -38,16 +37,21 @@ from datasets.data_io import get_transform
 parser = argparse.ArgumentParser(description='BGNet')
 parser.add_argument('--model', default='bgnet_plus', help='select a model structure')
 parser.add_argument('--dataset', default='kitti', help='dataset name', choices=__datasets__.keys())
-parser.add_argument('--datapath', default='/root/KITTI_2015/',help='datapath')
-parser.add_argument('--savepath', default='/root/BGNet/output/', help='save path')
-parser.add_argument('--trainlist', default='/root/BGNet/filenames/kitti15_train.txt', help='training list')
-parser.add_argument('--testlist', default='/root/BGNet/filenames/KITTI-15-Test.txt', help='testing list')
-parser.add_argument('--epochs', type=int, default=300,
-                    help='number of epochs to train')
-parser.add_argument('--loadmodel', default= '/root/BGNet/models/kitti_15_BGNet_Plus.pth',
+# parser.add_argument('--datapath', default='/root/KITTI_2015/',help='datapath')
+# parser.add_argument('--savepath', default='/root/BGNet/output/', help='save path')
+# parser.add_argument('--trainlist', default='/root/BGNet/filenames/kitti15_train.txt', help='training list')
+# parser.add_argument('--testlist', default='/root/BGNet/filenames/KITTI-15-Test.txt', help='testing list')
+# parser.add_argument('--loadmodel', default= '/root/BGNet/models/kitti_15_BGNet_Plus.pth',
+#                     help='load model')
+parser.add_argument('--datapath', default='/disk2/users/M22_zhaoqinghao/dataset/KITTI_2015/',help='datapath')
+parser.add_argument('--savepath', default='/disk2/users/M22_zhaoqinghao/BGNet/output/', help='save path')
+parser.add_argument('--trainlist', default='/disk2/users/M22_zhaoqinghao/BGNet/filenames/kitti15_train.txt', help='training list')
+parser.add_argument('--testlist', default='/disk2/users/M22_zhaoqinghao/BGNet/filenames/KITTI-15-Test.txt', help='testing list')
+parser.add_argument('--loadmodel', default= '/disk2/users/M22_zhaoqinghao/BGNet/models/Sceneflow-BGNet-Plus.pth',
                     help='load model')
 parser.add_argument('--savemodel', default='./',
                     help='save model')
+parser.add_argument('--epochs', type=int, default=300, help='number of epochs to train')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
@@ -62,7 +66,7 @@ datapath = args.datapath
 StereoDataset = __datasets__[args.dataset]
 
 kitti_real_train = args.trainlist
-kitti_real_train_dataset = StereoDataset(datapath, kitti_real_train, False)
+kitti_real_train_dataset = StereoDataset(datapath, kitti_real_train, True)
 TrainImgLoader = DataLoader(kitti_real_train_dataset, batch_size= 16, shuffle=False, num_workers=8, drop_last=False)
 
 kitti_real_test = args.testlist
