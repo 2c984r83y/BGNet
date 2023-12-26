@@ -42,7 +42,6 @@ parser.add_argument('--datapath', default='/root/KITTI_2015/',help='datapath')
 parser.add_argument('--savepath', default='/root/BGNet/output/', help='save path')
 parser.add_argument('--trainlist', default='/root/BGNet/filenames/kitti15_train.txt', help='training list')
 parser.add_argument('--testlist', default='/root/BGNet/filenames/KITTI-15-Test.txt', help='testing list')
-# parser.add_argument('--resume', default='/root/BGNet/models/kitti_15_BGNet_Plus.pth', help='the directory to save logs and checkpoints')
 parser.add_argument('--epochs', type=int, default=300,
                     help='number of epochs to train')
 parser.add_argument('--loadmodel', default= '/root/BGNet/models/kitti_15_BGNet_Plus.pth',
