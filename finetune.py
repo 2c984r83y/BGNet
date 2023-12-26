@@ -51,7 +51,7 @@ parser.add_argument('--loadmodel', default= '/disk2/users/M22_zhaoqinghao/BGNet/
                     help='load model')
 parser.add_argument('--savemodel', default='./',
                     help='save model')
-parser.add_argument('--epochs', type=int, default=300, help='number of epochs to train')
+parser.add_argument('--epochs', type=int, default=1, help='number of epochs to train')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
@@ -99,9 +99,7 @@ def train(imgL, imgR, disp_L):
     output, _ = model(imgL, imgR)
 
     disp_true = torch.squeeze(disp_true, 0)
-    disp_true = torch.squeeze(disp_true, 0)
     disp_true = torch.squeeze(disp_true, 1)
-    output = torch.squeeze(output, 0)
 
     mask = (disp_true > 0)
     mask.detach_()
@@ -122,8 +120,7 @@ def test(imgL, imgR, disp_true):
         output, _ = model(imgL, imgR)
 
     disp_true = torch.squeeze(disp_true, 0)
-    disp_true = torch.squeeze(disp_true, 0)
-    output = torch.squeeze(output, 0)
+    disp_true = torch.squeeze(disp_true, 1)
 
     mask = (disp_true > 0)
     mask.detach_()
