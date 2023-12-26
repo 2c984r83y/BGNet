@@ -88,6 +88,8 @@ if args.cuda:
 if args.loadmodel is not None:
     state_dict = torch.load(args.loadmodel, map_location=torch.device('cuda' if args.cuda else 'cpu'))
     model.load_state_dict(state_dict.get('state_dict', {}), strict=False)
+    print('load model')
+    print(args.loadmodel)
 print('Number of model parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
 
 optimizer = optim.Adam(model.parameters(), lr=0.1, betas=(0.9, 0.999))
@@ -115,38 +117,37 @@ def train(imgL, imgR, disp_L):
 
     return loss.data
 
-def test(imgL, imgR, disp_true):
+def test(imgL,imgR,disp_true):
     model.eval()
+    imgL   = Variable(torch.FloatTensor(imgL))
+    imgR   = Variable(torch.FloatTensor(imgR))   
     if args.cuda:
         imgL, imgR = imgL.cuda(), imgR.cuda()
 
     with torch.no_grad():
-        output, _ = model(imgL, imgR)
+        output3,_ = model(imgL,imgR)
 
-    disp_true = torch.squeeze(disp_true, 0)
-    disp_true = torch.squeeze(disp_true, 1)
-
-    mask = (disp_true > 0)
-    mask.detach_()
-
-    pred_disp = output.data.cpu()
+    disp_true = torch.squeeze(disp_true,1)
+    
+    pred_disp = output3.data.cpu()
 
     true_disp = copy.deepcopy(disp_true)
     index = np.argwhere(true_disp > 0)
-    disp_true[mask] = np.abs(true_disp[mask] - pred_disp[mask])
-    correct = (disp_true[mask] < 3) | (disp_true[mask] < true_disp[mask] * 0.05)
-    torch.cuda.empty_cache()
-
-    error_3px = torch.sum(~correct).item() / mask.sum().item()
-
-    return error_3px
     
+    disp_true[index[0][:], index[1][:], index[2][:]] = np.abs(
+        true_disp[index[0][:], index[1][:], index[2][:]] - pred_disp[index[0][:], index[1][:], index[2][:]])
+    correct = (disp_true[index[0][:], index[1][:], index[2][:]] < 3) | (
+                disp_true[index[0][:], index[1][:], index[2][:]] < true_disp[
+            index[0][:], index[1][:], index[2][:]] * 0.05)
+    torch.cuda.empty_cache()
+    return (float(torch.sum(correct))/float(len(index[0])))
+
 def adjust_learning_rate(optimizer, epoch):
     if epoch <= 200:
        lr = 0.001
     else:
        lr = 0.0001
-    print(lr)
+    print('learning rate = %.6f' %(lr))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
@@ -159,7 +160,7 @@ def main():
         total_train_loss = 0
         total_test_loss = 0
         adjust_learning_rate(optimizer, epoch)
-        
+        print('epoch %d' %(epoch))
         for batch_idx, sample in enumerate(TrainImgLoader):
             start_time = time.time()
             imgL, imgR, disp_L = sample['left'], sample['right'], sample['disparity']
@@ -171,7 +172,7 @@ def main():
             total_train_loss += loss
     
     print('epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TrainImgLoader)))
-    
+
     for batch_idx, sample in enumerate(TestImgLoader):
         imgL, imgR, disp_L = sample['left'], sample['right'], sample['disparity']
         test_loss = test(imgL, imgR, disp_L)
