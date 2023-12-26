@@ -43,15 +43,19 @@ parser.add_argument('--dataset', default='kitti', help='dataset name', choices=_
 # parser.add_argument('--testlist', default='/root/BGNet/filenames/KITTI-15-Test.txt', help='testing list')
 # parser.add_argument('--loadmodel', default= '/root/BGNet/models/kitti_15_BGNet_Plus.pth',
 #                     help='load model')
-parser.add_argument('--datapath', default='/disk2/users/M22_zhaoqinghao/dataset/KITTI_2015/',help='datapath')
-parser.add_argument('--savepath', default='/disk2/users/M22_zhaoqinghao/BGNet/output/', help='save path')
-parser.add_argument('--trainlist', default='/disk2/users/M22_zhaoqinghao/BGNet/filenames/kitti15_train.txt', help='training list')
-parser.add_argument('--testlist', default='/disk2/users/M22_zhaoqinghao/BGNet/filenames/KITTI-15-Test.txt', help='testing list')
+parser.add_argument('--datapath', default='/disk2/users/M22_zhaoqinghao/dataset/KITTI_2015/',
+                    help='datapath')
+parser.add_argument('--savepath', default='/disk2/users/M22_zhaoqinghao/BGNet/output/', 
+                    help='save path')
+parser.add_argument('--trainlist', default='/disk2/users/M22_zhaoqinghao/BGNet/filenames/kitti15_train.txt', 
+                    help='training list')
+parser.add_argument('--testlist', default='/disk2/users/M22_zhaoqinghao/BGNet/filenames/KITTI-15-Test.txt', 
+                    help='testing list')
 parser.add_argument('--loadmodel', default= '/disk2/users/M22_zhaoqinghao/BGNet/models/Sceneflow-BGNet-Plus.pth',
                     help='load model')
 parser.add_argument('--savemodel', default='./',
                     help='save model')
-parser.add_argument('--epochs', type=int, default=1, help='number of epochs to train')
+parser.add_argument('--epochs', type=int, default=300, help='number of epochs to train')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
