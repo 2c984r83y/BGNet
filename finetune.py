@@ -43,7 +43,7 @@ parser.add_argument('--dataset', default='kitti', help='dataset name', choices=_
 # parser.add_argument('--testlist', default='/root/BGNet/filenames/KITTI-15-Test.txt', help='testing list')
 # parser.add_argument('--loadmodel', default= '/root/BGNet/models/kitti_15_BGNet_Plus.pth',
 #                     help='load model')
-parser.add_argument('--datapath', default='/disk2/users/M22_zhaoqinghao/dataset/KITTI_2015/',
+parser.add_argument('--datapath', default='/home/zhaoqinghao/dataset/KITTI_2015/',
                     help='datapath')
 parser.add_argument('--savepath', default='/disk2/users/M22_zhaoqinghao/BGNet/output/', 
                     help='save path')
