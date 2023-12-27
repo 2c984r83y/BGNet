@@ -73,16 +73,24 @@ def inception_color_preproccess(input_size, normalize=__imagenet_stats):
     ])
 
 
-def get_transform(name='imagenet', input_size=None,
-                  scale_size=None, normalize=None, augment=True):
-    normalize = __imagenet_stats
-    input_size = 256
-    if augment:
-            return inception_color_preproccess(input_size, normalize=normalize)
-    else:
-            return scale_crop(input_size=input_size,
-                              scale_size=scale_size, normalize=normalize)
+# def get_transform(name='imagenet', input_size=None,
+#                   scale_size=None, normalize=None, augment=True):
+#     normalize = __imagenet_stats
+#     input_size = 256
+#     if augment:
+#             return inception_color_preproccess(input_size, normalize=normalize)
+#     else:
+#             return scale_crop(input_size=input_size,
+#                               scale_size=scale_size, normalize=normalize)
+def get_transform():
 
+    normalize = __imagenet_stats
+    t_list = [
+        transforms.ToTensor(),
+        #transforms.Normalize(**normalize),
+    ]
+
+    return transforms.Compose(t_list)
 
 
 

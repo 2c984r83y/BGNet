@@ -19,7 +19,7 @@ def is_image_file(filename):
     return any(filename.endswith(extension) for extension in IMG_EXTENSIONS)
 
 def default_loader(path):
-    return Image.open(path).convert('RGB')
+    return Image.open(path).convert('L')
 
 def disparity_loader(path):
     return rp.readPFM(path)
@@ -54,16 +54,28 @@ class myImageFloder(data.Dataset):
 
             left_img = left_img.crop((x1, y1, x1 + tw, y1 + th))
             right_img = right_img.crop((x1, y1, x1 + tw, y1 + th))
-
+            
+            # add from kitti dataloader
+            left_img = left_img.convert('L')
+            right_img = right_img.convert('L')
+            left_img = np.ascontiguousarray(left_img, dtype=np.float32)
+            right_img = np.ascontiguousarray(right_img, dtype=np.float32)
+            
             dataL = dataL[y1:y1 + th, x1:x1 + tw]
 
-            processed = preprocess.get_transform(augment=False)  
+            processed = preprocess.get_transform()  
             left_img   = processed(left_img)
             right_img  = processed(right_img)
-
+            dataL = np.expand_dims(dataL, 0)
             return left_img, right_img, dataL
         else:
-            processed = preprocess.get_transform(augment=False)  
+            # add from kitti dataloader
+            left_img = left_img.convert('L')
+            right_img = right_img.convert('L')
+            left_img = np.ascontiguousarray(left_img, dtype=np.float32)
+            right_img = np.ascontiguousarray(right_img, dtype=np.float32)
+            
+            processed = preprocess.get_transform()  
             left_img       = processed(left_img)
             right_img      = processed(right_img) 
             return left_img, right_img, dataL
