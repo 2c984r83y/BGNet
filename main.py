@@ -163,9 +163,9 @@ def main():
         print('epoch %d total training loss = %.3f' %(epoch, total_train_loss/(1e-8+len(TrainImgLoader))))
 
         #SAVE
-        savefilename = args.savemodel+'/checkpoint_'+str(epoch)+'.tar'
-        torch.save(model.state_dict(), savefilename)
 
+        savefilename = args.savemodel+'checkpoint_'+str(epoch)+'.pth'
+        torch.save(model.state_dict(), savefilename)
     print('full training time = %.2f HR' %((time.time() - start_full_time)/3600))
 
     #------------- TEST ------------------------------------------------------------
