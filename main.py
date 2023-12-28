@@ -24,7 +24,7 @@ parser.add_argument('--maxdisp', type=int ,default=192,
                     help='maxium disparity')
 parser.add_argument('--datapath', default='/home/zhaoqinghao/dataset/sceneflow/',
                     help='datapath')
-parser.add_argument('--epochs', type=int, default=10,
+parser.add_argument('--epochs', type=int, default=30,
                     help='number of epochs to train')
 parser.add_argument('--loadmodel', default= None,
                     help='load model')
@@ -80,10 +80,9 @@ def train(imgL, imgR, disp_L):
     optimizer.zero_grad()
 
     output, _ = model(imgL, imgR)
-
-    disp_true = torch.squeeze(disp_true, 0)
+    
     disp_true = torch.squeeze(disp_true, 1)
-
+    
     mask = (disp_true > 0)
     mask.detach_()
     
