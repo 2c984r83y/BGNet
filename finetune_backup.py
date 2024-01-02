@@ -36,28 +36,26 @@ from datasets.data_io import get_transform
 
 parser = argparse.ArgumentParser(description='BGNet')
 parser.add_argument('--model', default='bgnet_plus', help='select a model structure')
-parser.add_argument('--dataset', default='DSEC_png', help='dataset name', choices=__datasets__.keys())
+parser.add_argument('--dataset', default='kitti', help='dataset name', choices=__datasets__.keys())
 # parser.add_argument('--datapath', default='/root/KITTI_2015/',help='datapath')
 # parser.add_argument('--savepath', default='/root/BGNet/output/', help='save path')
 # parser.add_argument('--trainlist', default='/root/BGNet/filenames/kitti15_train.txt', help='training list')
 # parser.add_argument('--testlist', default='/root/BGNet/filenames/KITTI-15-Test.txt', help='testing list')
 # parser.add_argument('--loadmodel', default= '/root/BGNet/models/kitti_15_BGNet_Plus.pth',
 #                     help='load model')
-
-parser.add_argument('--datapath', default='/home/zhaoqinghao/dataset/DSEC/output',
+parser.add_argument('--datapath', default='/home/zhaoqinghao/dataset/KITTI_2015/',
                     help='datapath')
 parser.add_argument('--savepath', default='/disk2/users/M22_zhaoqinghao/BGNet/output/', 
                     help='save path')
-parser.add_argument('--trainlist', default='/home/zhaoqinghao/DSEC/output.txt', 
+parser.add_argument('--trainlist', default='/disk2/users/M22_zhaoqinghao/BGNet/filenames/kitti15_train.txt', 
                     help='training list')
 parser.add_argument('--testlist', default='/disk2/users/M22_zhaoqinghao/BGNet/filenames/KITTI-15-Test.txt', 
                     help='testing list')
 parser.add_argument('--loadmodel', default= '/disk2/users/M22_zhaoqinghao/BGNet/models/Sceneflow-BGNet-Plus.pth',
                     help='load model')
-
 parser.add_argument('--savemodel', default='./',
                     help='save model')
-parser.add_argument('--epochs', type=int, default=30, help='number of epochs to train')
+parser.add_argument('--epochs', type=int, default=300, help='number of epochs to train')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
@@ -73,11 +71,11 @@ StereoDataset = __datasets__[args.dataset]
 
 kitti_real_train = args.trainlist
 kitti_real_train_dataset = StereoDataset(datapath, kitti_real_train, True)
-TrainImgLoader = DataLoader(kitti_real_train_dataset, batch_size= 48, shuffle=True, num_workers=16, drop_last=False)
+TrainImgLoader = DataLoader(kitti_real_train_dataset, batch_size= 16, shuffle=False, num_workers=8, drop_last=False)
 
-# kitti_real_test = args.testlist
-# kitti_real_test_dataset = StereoDataset(datapath, kitti_real_test, False)
-# TestImgLoader = DataLoader(kitti_real_test_dataset, batch_size= 12, shuffle=False, num_workers=4, drop_last=False)
+kitti_real_test = args.testlist
+kitti_real_test_dataset = StereoDataset(datapath, kitti_real_test, False)
+TestImgLoader = DataLoader(kitti_real_test_dataset, batch_size= 12, shuffle=False, num_workers=4, drop_last=False)
 
 if args.model == 'bgnet':
     model = BGNet().cuda()
@@ -175,19 +173,19 @@ def main():
     
     print('epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TrainImgLoader)))
 
-    # for batch_idx, sample in enumerate(TestImgLoader):
-    #     imgL, imgR, disp_L = sample['left'], sample['right'], sample['disparity']
-    #     test_loss = test(imgL, imgR, disp_L)
-    #     print('Iter %d 3-px Accuracy in val = %.3f' %(batch_idx, test_loss*100))
-    #     total_test_loss += test_loss
+    for batch_idx, sample in enumerate(TestImgLoader):
+        imgL, imgR, disp_L = sample['left'], sample['right'], sample['disparity']
+        test_loss = test(imgL, imgR, disp_L)
+        print('Iter %d 3-px Accuracy in val = %.3f' %(batch_idx, test_loss*100))
+        total_test_loss += test_loss
 
-    # print('epoch %d total 3-px Accuracy in val = %.3f' %(epoch, total_test_loss/len(TestImgLoader)*100))
+    print('epoch %d total 3-px Accuracy in val = %.3f' %(epoch, total_test_loss/len(TestImgLoader)*100))
     
-    # if total_test_loss/len(TestImgLoader)*100 > max_acc:
-    #     max_acc = total_test_loss/len(TestImgLoader)*100
-    #     max_epo = epoch
+    if total_test_loss/len(TestImgLoader)*100 > max_acc:
+        max_acc = total_test_loss/len(TestImgLoader)*100
+        max_epo = epoch
     
-    # print('MAX epoch %d total test Accuracy = %.3f' %(max_epo, max_acc))
+    print('MAX epoch %d total test Accuracy = %.3f' %(max_epo, max_acc))
 
     savefilename = args.savemodel+'finetune_'+str(epoch)+'.pth'
     torch.save(model.state_dict(), savefilename)
