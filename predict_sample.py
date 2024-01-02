@@ -25,15 +25,15 @@ import time
 model = BGNet_Plus().cuda()
 
 # checkpoint = torch.load('models/kitti_15_BGNet_Plus.pth',map_location=lambda storage, loc: storage)
-checkpoint = torch.load('./finetune_300.pth',map_location=lambda storage, loc: storage)
+checkpoint = torch.load('./finetune_30.pth',map_location=lambda storage, loc: storage)
 
 model.load_state_dict(checkpoint) 
 model.eval()
 # left_img = Image.open('sample/im0.png').convert('L')
 # right_img = Image.open('sample/im1.png').convert('L')
 
-left_img = Image.open('/home/zhaoqinghao/dataset/left_ev_img.png').convert('L')
-right_img = Image.open('/home/zhaoqinghao/dataset/right_ev_img.png').convert('L')
+left_img = Image.open('/home/zhaoqinghao/DSEC/output/left/000233.png').convert('L')
+right_img = Image.open('/home/zhaoqinghao/DSEC/output/right/000233.png').convert('L')
 
 # left_img = Image.open('/root/KITTI_2015/testing/image_2/000001_10.png').convert('L')
 # right_img = Image.open('/root/KITTI_2015/testing/image_3/000001_10.png').convert('L')
