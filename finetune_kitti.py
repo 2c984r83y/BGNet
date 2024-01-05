@@ -156,34 +156,30 @@ def main():
     max_epo = 0
     start_full_time = time.time()
     
-    # for epoch in range(1, args.epochs+1):
-    #     total_train_loss = 0
-    #     total_test_loss = 0
-    #     adjust_learning_rate(optimizer, epoch)
-    #     print('epoch %d' %(epoch))
-    #     for batch_idx, sample in enumerate(TrainImgLoader):
-    #         start_time = time.time()
-    #         imgL, imgR, disp_L = sample['left'], sample['right'], sample['disparity']
-    #         imgL = imgL.cuda()
-    #         imgR = imgR.cuda()
-    #         disp_L = disp_L.cuda()
-    #         loss = train(imgL, imgR, disp_L)
-    #         print('Iter %d training loss = %.3f , time = %.2f' %(batch_idx, loss, time.time() - start_time))
-    #         total_train_loss += loss
+    for epoch in range(1, args.epochs+1):
+        total_train_loss = 0
+        total_test_loss = 0
+        adjust_learning_rate(optimizer, epoch)
+        print('epoch %d' %(epoch))
+        for batch_idx, sample in enumerate(TrainImgLoader):
+            start_time = time.time()
+            imgL, imgR, disp_L = sample['left'], sample['right'], sample['disparity']
+            imgL = imgL.cuda()
+            imgR = imgR.cuda()
+            disp_L = disp_L.cuda()
+            loss = train(imgL, imgR, disp_L)
+            print('Iter %d training loss = %.3f , time = %.2f' %(batch_idx, loss, time.time() - start_time))
+            total_train_loss += loss
     
-    # print('epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TrainImgLoader)))
-    epoch = 1
-    total_test_loss = 0
+    print('epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TrainImgLoader)))
+
     for batch_idx, sample in enumerate(TestImgLoader):
         imgL, imgR, disp_L = sample['left'], sample['right'], sample['disparity']
-        # print(imgL.shape)
-        # print(imgR.shape)
-        # print(disp_L.shape)
         test_loss = test(imgL, imgR, disp_L)
         print('Iter %d 3-px Accuracy in val = %.3f' %(batch_idx, test_loss*100))
         total_test_loss += test_loss
 
-    # print('epoch %d total 3-px Accuracy in val = %.3f' %(epoch, total_test_loss/len(TestImgLoader)*100))
+    print('epoch %d total 3-px Accuracy in val = %.3f' %(epoch, total_test_loss/len(TestImgLoader)*100))
     
     if total_test_loss/len(TestImgLoader)*100 > max_acc:
         max_acc = total_test_loss/len(TestImgLoader)*100

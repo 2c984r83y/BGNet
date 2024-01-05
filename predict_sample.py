@@ -21,6 +21,7 @@ from datasets.data_io import get_transform
 from models.bgnet import BGNet
 from models.bgnet_plus import BGNet_Plus
 import time
+import copy
 
 model = BGNet_Plus().cuda()
 
@@ -34,7 +35,7 @@ model.eval()
 
 left_img = Image.open('/home/zhaoqinghao/DSEC/output/left/000233.png').convert('L')
 right_img = Image.open('/home/zhaoqinghao/DSEC/output/right/000233.png').convert('L')
-
+disp_true = Image.open('/home/zhaoqinghao/DSEC/output/disp/000233.png').convert('L')
 # left_img = Image.open('/root/KITTI_2015/testing/image_2/000001_10.png').convert('L')
 # right_img = Image.open('/root/KITTI_2015/testing/image_3/000001_10.png').convert('L')
 w, h = left_img.size
@@ -69,6 +70,13 @@ time_start=time.time()
 # unsqueeze(0) 将在第一个维度（索引为 0）上增加一个维度
 with torch.no_grad():
     pred,_ = model(left_img.unsqueeze(0).cuda(), right_img.unsqueeze(0).cuda())
+
+print(pred.shape)
+print(disp_true.size)
+# torch.Size([1, 448, 640])
+# (640, 480)
+# pred 的y坐标比disp_true小12，所以disp_true要将0-12行去掉
+
 # print time cost
 print('time cost: ',(time.time()-time_start)*1000,'ms')
 print('FPS: ',1/(time.time()-time_start))
