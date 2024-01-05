@@ -54,10 +54,9 @@ parser.add_argument('--testlist', default='/disk2/users/M22_zhaoqinghao/BGNet/fi
                     help='testing list')
 parser.add_argument('--loadmodel', default= '/disk2/users/M22_zhaoqinghao/BGNet/models/Sceneflow-BGNet-Plus.pth',
                     help='load model')
-
 parser.add_argument('--savemodel', default='./',
                     help='save model')
-parser.add_argument('--epochs', type=int, default=30, help='number of epochs to train')
+parser.add_argument('--epochs', type=int, default=100, help='number of epochs to train')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
