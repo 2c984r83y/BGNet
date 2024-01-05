@@ -92,7 +92,7 @@ class KITTIDataset(Dataset):
             top_pad = 384 - h
             right_pad = 1280 - w
             assert top_pad > 0 and right_pad > 0
-                                 
+            # print('top_pad: {}, right_pad: {}'.format(top_pad, right_pad))
             left_img = np.ascontiguousarray(left_img, dtype=np.float32)
             right_img = np.ascontiguousarray(right_img, dtype=np.float32)
             
@@ -103,8 +103,9 @@ class KITTIDataset(Dataset):
             preprocess = get_transform()
             left_img = preprocess(left_img)
             right_img = preprocess(right_img)
-        
+
             disparity = np.expand_dims(disparity, 0)
+
             # return [left_img,right_img],-disparity
             return {"left": left_img,
                    "right": right_img,

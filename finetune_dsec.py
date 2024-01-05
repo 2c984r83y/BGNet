@@ -36,7 +36,7 @@ from datasets.data_io import get_transform
 
 parser = argparse.ArgumentParser(description='BGNet')
 parser.add_argument('--model', default='bgnet_plus', help='select a model structure')
-parser.add_argument('--dataset', default='DSEC_png', help='dataset name', choices=__datasets__.keys())
+parser.add_argument('--dataset', default='dsec_png', help='dataset name', choices=__datasets__.keys())
 # parser.add_argument('--datapath', default='/root/KITTI_2015/',help='datapath')
 # parser.add_argument('--savepath', default='/root/BGNet/output/', help='save path')
 # parser.add_argument('--trainlist', default='/root/BGNet/filenames/kitti15_train.txt', help='training list')
@@ -48,15 +48,15 @@ parser.add_argument('--datapath', default='/home/zhaoqinghao/dataset/DSEC/output
                     help='datapath')
 parser.add_argument('--savepath', default='/disk2/users/M22_zhaoqinghao/BGNet/output/', 
                     help='save path')
-parser.add_argument('--trainlist', default='/home/zhaoqinghao/DSEC/output.txt', 
+parser.add_argument('--trainlist', default='/home/zhaoqinghao/DSEC/train.txt', 
                     help='training list')
-parser.add_argument('--testlist', default='/disk2/users/M22_zhaoqinghao/BGNet/filenames/KITTI-15-Test.txt', 
+parser.add_argument('--testlist', default='/home/zhaoqinghao/DSEC/test.txt', 
                     help='testing list')
-parser.add_argument('--loadmodel', default= '/disk2/users/M22_zhaoqinghao/BGNet/models/Sceneflow-BGNet-Plus.pth',
+parser.add_argument('--loadmodel', default= '/disk2/users/M22_zhaoqinghao/BGNet/finetune_30_dsec.pth',
                     help='load model')
 parser.add_argument('--savemodel', default='./',
                     help='save model')
-parser.add_argument('--epochs', type=int, default=100, help='number of epochs to train')
+parser.add_argument('--epochs', type=int, default=1, help='number of epochs to train')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
@@ -70,13 +70,13 @@ if args.cuda:
 datapath = args.datapath
 StereoDataset = __datasets__[args.dataset]
 
-kitti_real_train = args.trainlist
-kitti_real_train_dataset = StereoDataset(datapath, kitti_real_train, True)
-TrainImgLoader = DataLoader(kitti_real_train_dataset, batch_size= 48, shuffle=True, num_workers=16, drop_last=False)
+dsec_train = args.trainlist
+dsec_train_dataset = StereoDataset(datapath, dsec_train, True)
+TrainImgLoader = DataLoader(dsec_train_dataset, batch_size= 1, shuffle=True, num_workers=16, drop_last=False)
 
-# kitti_real_test = args.testlist
-# kitti_real_test_dataset = StereoDataset(datapath, kitti_real_test, False)
-# TestImgLoader = DataLoader(kitti_real_test_dataset, batch_size= 12, shuffle=False, num_workers=4, drop_last=False)
+dsec_test = args.testlist
+dsec_test_dataset = StereoDataset(datapath, dsec_test, False)
+TestImgLoader = DataLoader(dsec_test_dataset, batch_size= 1, shuffle=False, num_workers=4, drop_last=False)
 
 if args.model == 'bgnet':
     model = BGNet().cuda()
@@ -121,21 +121,21 @@ def train(imgL, imgR, disp_L):
 def test(imgL,imgR,disp_true):
     model.eval()
     imgL   = Variable(torch.FloatTensor(imgL))
-    imgR   = Variable(torch.FloatTensor(imgR))   
+    imgR   = Variable(torch.FloatTensor(imgR))
     if args.cuda:
         imgL, imgR = imgL.cuda(), imgR.cuda()
 
     with torch.no_grad():
-        output3,_ = model(imgL,imgR)
+        output,_ = model(imgL,imgR)
 
     disp_true = torch.squeeze(disp_true,1)
     
-    pred_disp = output3.data.cpu()
+    pred_disp = output.data.cpu()
 
     true_disp = copy.deepcopy(disp_true)
     index = np.argwhere(true_disp > 0)
-    
-    disp_true[index[0][:], index[1][:], index[2][:]] = np.abs(
+    disp_true = disp_true.float()  # Convert disp_true to float data type
+    disp_true[index[0][:], index[1][:], index[2][:]] = torch.abs(
         true_disp[index[0][:], index[1][:], index[2][:]] - pred_disp[index[0][:], index[1][:], index[2][:]])
     correct = (disp_true[index[0][:], index[1][:], index[2][:]] < 3) | (
                 disp_true[index[0][:], index[1][:], index[2][:]] < true_disp[
@@ -174,19 +174,19 @@ def main():
     
     print('epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TrainImgLoader)))
 
-    # for batch_idx, sample in enumerate(TestImgLoader):
-    #     imgL, imgR, disp_L = sample['left'], sample['right'], sample['disparity']
-    #     test_loss = test(imgL, imgR, disp_L)
-    #     print('Iter %d 3-px Accuracy in val = %.3f' %(batch_idx, test_loss*100))
-    #     total_test_loss += test_loss
+    for batch_idx, sample in enumerate(TestImgLoader):
+        imgL, imgR, disp_L = sample['left'], sample['right'], sample['disparity']
+        test_loss = test(imgL, imgR, disp_L)
+        print('Iter %d 3-px Accuracy in val = %.3f' %(batch_idx, test_loss*100))
+        total_test_loss += test_loss
 
-    # print('epoch %d total 3-px Accuracy in val = %.3f' %(epoch, total_test_loss/len(TestImgLoader)*100))
+    print('epoch %d total 3-px Accuracy in val = %.3f' %(epoch, total_test_loss/len(TestImgLoader)*100))
     
-    # if total_test_loss/len(TestImgLoader)*100 > max_acc:
-    #     max_acc = total_test_loss/len(TestImgLoader)*100
-    #     max_epo = epoch
+    if total_test_loss/len(TestImgLoader)*100 > max_acc:
+        max_acc = total_test_loss/len(TestImgLoader)*100
+        max_epo = epoch
     
-    # print('MAX epoch %d total test Accuracy = %.3f' %(max_epo, max_acc))
+    print('MAX epoch %d total test Accuracy = %.3f' %(max_epo, max_acc))
 
     savefilename = args.savemodel+'finetune_'+str(epoch)+'.pth'
     torch.save(model.state_dict(), savefilename)

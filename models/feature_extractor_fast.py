@@ -83,15 +83,16 @@ class Conv2x(nn.Module):
         else:
             kernel = 3
         self.conv1 = BasicConv(in_channels, out_channels, deconv, is_3d, bn=False, relu=True, kernel_size=kernel, stride=2, padding=1)
-
         if self.concat: 
             self.conv2 = BasicConv(out_channels*2, out_channels, False, is_3d, bn, relu, kernel_size=3, stride=1, padding=1)
         else:
             self.conv2 = BasicConv(out_channels, out_channels, False, is_3d, bn, relu, kernel_size=3, stride=1, padding=1)
 
     def forward(self, x, rem):
-
         x = self.conv1(x)
+        # print("feature_extractor_fast.py, line 96, in forward")
+        # print(x.size())
+        # print(rem.size())
         assert(x.size() == rem.size())
         if self.concat:
             x = torch.cat((x, rem), 1)
@@ -183,16 +184,19 @@ class feature_extraction(nn.Module):
         rem1 = x
         #1/4 * 1/4 * 64
         x = self.conv2a(x)
+        # print("rem2",x.shape)
         rem2 = x
         #1/8 * 1/8 * 96
         x = self.conv3a(x)
         rem3 = x
         #1/16 * 1/16 * 128
-#         x = self.conv4a(x)
-#         rem4 = x
-#         x = self.deconv4a(x, rem3)
-#         rem3 = x
-
+        # x = self.conv4a(x)
+        # rem4 = x
+        # x = self.deconv4a(x, rem3)
+        # rem3 = x
+        # print("deconv3a")
+        # print(x.shape)
+        # print(rem2.shape)
         x = self.deconv3a(x, rem2)
         rem2 = x
         x = self.deconv2a(x, rem1)

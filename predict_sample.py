@@ -25,7 +25,7 @@ import time
 model = BGNet_Plus().cuda()
 
 # checkpoint = torch.load('models/kitti_15_BGNet_Plus.pth',map_location=lambda storage, loc: storage)
-checkpoint = torch.load('./finetune_30.pth',map_location=lambda storage, loc: storage)
+checkpoint = torch.load('./finetune_30_dsec.pth',map_location=lambda storage, loc: storage)
 
 model.load_state_dict(checkpoint) 
 model.eval()

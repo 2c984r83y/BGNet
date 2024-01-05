@@ -90,22 +90,24 @@ class DSEC_png_Dataset(Dataset):
                    "disparity": disparity}
         else:
             w, h = left_img.size
-            top_pad = 480 - h
-            right_pad = 640 - w
-            assert top_pad > 0 and right_pad > 0
-                                 
+            h1 = h % 64
+            w1 = w % 64
+            h1 = h  - h1
+            w1 =  w - w1
+            h1 = int(h1)
+            w1 = int(w1)
+
+            left_img = left_img.resize((w1, h1),Image.Resampling.LANCZOS)   # Resize using Lanczos resampling
+            right_img = right_img.resize((w1, h1),Image.Resampling.LANCZOS)
+
             left_img = np.ascontiguousarray(left_img, dtype=np.float32)
             right_img = np.ascontiguousarray(right_img, dtype=np.float32)
-            
-            left_img = np.lib.pad(left_img, ((top_pad, 0), (0, right_pad)), mode='symmetric', )
-            right_img = np.lib.pad(right_img, ((top_pad, 0), (0, right_pad)), mode='symmetric')
-            disparity = np.lib.pad(disparity, ((top_pad, 0), (0, right_pad)), mode='constant', constant_values=0)
-            
-            preprocess = get_transform()
+            preprocess = get_transform()    # get_transform()函数返回一个转换列表，它将图像转换为 PyTorch 张量
             left_img = preprocess(left_img)
             right_img = preprocess(right_img)
-        
+
             disparity = np.expand_dims(disparity, 0)
+            
             # return [left_img,right_img],-disparity
             return {"left": left_img,
                    "right": right_img,
