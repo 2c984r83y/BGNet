@@ -99,13 +99,16 @@ class DSEC_png_Dataset(Dataset):
 
             left_img = left_img.resize((w1, h1),Image.Resampling.LANCZOS)   # Resize using Lanczos resampling
             right_img = right_img.resize((w1, h1),Image.Resampling.LANCZOS)
-
+            disparity = disparity.resize((w1, h1),Image.Resampling.LANCZOS)
+            
             left_img = np.ascontiguousarray(left_img, dtype=np.float32)
             right_img = np.ascontiguousarray(right_img, dtype=np.float32)
+            disparity = np.ascontiguousarray(disparity, dtype=np.float32)
             preprocess = get_transform()    # get_transform()函数返回一个转换列表，它将图像转换为 PyTorch 张量
             left_img = preprocess(left_img)
             right_img = preprocess(right_img)
-
+            disparity = preprocess(disparity)
+            
             disparity = np.expand_dims(disparity, 0)
             
             # return [left_img,right_img],-disparity

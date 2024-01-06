@@ -48,7 +48,7 @@ parser.add_argument('--datapath', default='/home/zhaoqinghao/dataset/DSEC/output
                     help='datapath')
 parser.add_argument('--savepath', default='/disk2/users/M22_zhaoqinghao/BGNet/output/', 
                     help='save path')
-parser.add_argument('--trainlist', default='/home/zhaoqinghao/DSEC/train.txt', 
+parser.add_argument('--trainlist', default='/home/zhaoqinghao/DSEC/test.txt', 
                     help='training list')
 parser.add_argument('--testlist', default='/home/zhaoqinghao/DSEC/test.txt', 
                     help='testing list')
@@ -72,11 +72,11 @@ StereoDataset = __datasets__[args.dataset]
 
 dsec_train = args.trainlist
 dsec_train_dataset = StereoDataset(datapath, dsec_train, True)
-TrainImgLoader = DataLoader(dsec_train_dataset, batch_size= 1, shuffle=True, num_workers=16, drop_last=False)
+TrainImgLoader = DataLoader(dsec_train_dataset, batch_size= 2, shuffle=True, num_workers=16, drop_last=False)
 
 dsec_test = args.testlist
 dsec_test_dataset = StereoDataset(datapath, dsec_test, False)
-TestImgLoader = DataLoader(dsec_test_dataset, batch_size= 1, shuffle=False, num_workers=4, drop_last=False)
+TestImgLoader = DataLoader(dsec_test_dataset, batch_size= 2, shuffle=False, num_workers=4, drop_last=False)
 
 if args.model == 'bgnet':
     model = BGNet().cuda()
@@ -120,28 +120,25 @@ def train(imgL, imgR, disp_L):
 
 def test(imgL,imgR,disp_true):
     model.eval()
-    imgL   = Variable(torch.FloatTensor(imgL))
-    imgR   = Variable(torch.FloatTensor(imgR))
-    if args.cuda:
-        imgL, imgR = imgL.cuda(), imgR.cuda()
 
     with torch.no_grad():
-        output,_ = model(imgL,imgR)
-
-    disp_true = torch.squeeze(disp_true,1)
-    
-    pred_disp = output.data.cpu()
-
+        pred,_ = model(imgL.cuda(), imgR.cuda())
+    disp_true = torch.squeeze(disp_true, 1)
+    disp_true = torch.squeeze(disp_true, 1)
+    pred_disp = pred.data.cpu()
     true_disp = copy.deepcopy(disp_true)
     index = np.argwhere(true_disp > 0)
     disp_true = disp_true.float()  # Convert disp_true to float data type
+    # print(pred.shape)
+    # print(disp_true.shape)
     disp_true[index[0][:], index[1][:], index[2][:]] = torch.abs(
         true_disp[index[0][:], index[1][:], index[2][:]] - pred_disp[index[0][:], index[1][:], index[2][:]])
     correct = (disp_true[index[0][:], index[1][:], index[2][:]] < 3) | (
                 disp_true[index[0][:], index[1][:], index[2][:]] < true_disp[
             index[0][:], index[1][:], index[2][:]] * 0.05)
     torch.cuda.empty_cache()
-    return (float(torch.sum(correct))/float(len(index[0])))
+    acc = (float(torch.sum(correct))/float(len(index[0])))
+    return acc
 
 def adjust_learning_rate(optimizer, epoch):
     if epoch <= 200:
