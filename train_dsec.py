@@ -48,15 +48,15 @@ parser.add_argument('--datapath', default='/home/zhaoqinghao/dataset/DSEC/output
                     help='datapath')
 parser.add_argument('--savepath', default='/disk2/users/M22_zhaoqinghao/BGNet/output/', 
                     help='save path')
-parser.add_argument('--trainlist', default='/home/zhaoqinghao/DSEC/test.txt', 
+parser.add_argument('--trainlist', default='/home/zhaoqinghao/DSEC/train.txt', 
                     help='training list')
 parser.add_argument('--testlist', default='/home/zhaoqinghao/DSEC/test.txt', 
                     help='testing list')
-parser.add_argument('--loadmodel', default= '/disk2/users/M22_zhaoqinghao/BGNet/finetune_30_dsec.pth',
+parser.add_argument('--loadmodel', default= None,
                     help='load model')
 parser.add_argument('--savemodel', default='./',
                     help='save model')
-parser.add_argument('--epochs', type=int, default=1, help='number of epochs to train')
+parser.add_argument('--epochs', type=int, default=300, help='number of epochs to train')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
@@ -72,11 +72,11 @@ StereoDataset = __datasets__[args.dataset]
 
 dsec_train = args.trainlist
 dsec_train_dataset = StereoDataset(datapath, dsec_train, True)
-TrainImgLoader = DataLoader(dsec_train_dataset, batch_size= 2, shuffle=True, num_workers=16, drop_last=False)
+TrainImgLoader = DataLoader(dsec_train_dataset, batch_size= 16, shuffle=True, num_workers=16, drop_last=False)
 
 dsec_test = args.testlist
 dsec_test_dataset = StereoDataset(datapath, dsec_test, False)
-TestImgLoader = DataLoader(dsec_test_dataset, batch_size= 2, shuffle=False, num_workers=4, drop_last=False)
+TestImgLoader = DataLoader(dsec_test_dataset, batch_size= 8, shuffle=False, num_workers=4, drop_last=False)
 
 if args.model == 'bgnet':
     model = BGNet().cuda()
@@ -93,7 +93,7 @@ if args.loadmodel is not None:
     print(args.loadmodel)
 print('Number of model parameters: {}'.format(sum([p.data.nelement() for p in model.parameters()])))
 
-optimizer = optim.Adam(model.parameters(), lr=0.1, betas=(0.9, 0.999))
+optimizer = optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999), weight_decay=1e-4)
 
 def train(imgL, imgR, disp_L):
     model.train()
@@ -128,7 +128,7 @@ def test(imgL,imgR,disp_true):
     pred_disp = pred.data.cpu()
     true_disp = copy.deepcopy(disp_true)
     index = np.argwhere(true_disp > 0)
-    disp_true = disp_true.float()  # Convert disp_true to float data type
+    disp_true = disp_true.float()  
     # print(pred.shape)
     # print(disp_true.shape)
     disp_true[index[0][:], index[1][:], index[2][:]] = torch.abs(
@@ -155,22 +155,23 @@ def main():
     start_full_time = time.time()
     
     for epoch in range(1, args.epochs+1):
+        print('This is %d-th epoch' %(epoch))
         total_train_loss = 0
-        total_test_loss = 0
         adjust_learning_rate(optimizer, epoch)
         print('epoch %d' %(epoch))
         for batch_idx, sample in enumerate(TrainImgLoader):
             start_time = time.time()
             imgL, imgR, disp_L = sample['left'], sample['right'], sample['disparity']
-            imgL = imgL.cuda()
-            imgR = imgR.cuda()
-            disp_L = disp_L.cuda()
-            loss = train(imgL, imgR, disp_L)
+            loss = train(imgL.cuda(), imgR.cuda(), disp_L.cuda())
             print('Iter %d training loss = %.3f , time = %.2f' %(batch_idx, loss, time.time() - start_time))
             total_train_loss += loss
+        print('epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TrainImgLoader)))
     
-    print('epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TrainImgLoader)))
-
+        if epoch % 10 == 0:
+            savefilename = args.savemodel+'checkpoint_'+str(epoch)+'.pth'
+            torch.save(model.state_dict(), savefilename)
+    
+    total_test_loss = 0
     for batch_idx, sample in enumerate(TestImgLoader):
         imgL, imgR, disp_L = sample['left'], sample['right'], sample['disparity']
         test_loss = test(imgL, imgR, disp_L)
@@ -185,8 +186,7 @@ def main():
     
     print('MAX epoch %d total test Accuracy = %.3f' %(max_epo, max_acc))
 
-    savefilename = args.savemodel+'finetune_'+str(epoch)+'.pth'
-    torch.save(model.state_dict(), savefilename)
+
     print('full finetune time = %.2f HR' %((time.time() - start_full_time)/3600))
     print(max_epo)
     print(max_acc)
