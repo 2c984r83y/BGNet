@@ -39,6 +39,7 @@ class DSEC_png_Dataset(Dataset):
     def load_disp(self, filename):
         data = Image.open(filename)
         # data = np.array(data, dtype=np.float32) / 256.
+        data = np.array(data, dtype=np.float32)
         return data
 
     def __len__(self):
@@ -66,7 +67,7 @@ class DSEC_png_Dataset(Dataset):
             # right_img = right_img.convert('L')
             
             w, h = left_img.size
-            crop_w, crop_h = 256, 192
+            crop_w, crop_h = 320, 256
 
             x1 = random.randint(0, w - crop_w)
             y1 = random.randint(0, h - crop_h)
@@ -74,8 +75,8 @@ class DSEC_png_Dataset(Dataset):
             # random crop
             left_img = left_img.crop((x1, y1, x1 + crop_w, y1 + crop_h))
             right_img = right_img.crop((x1, y1, x1 + crop_w, y1 + crop_h))
-            disparity = disparity.crop((x1, y1, x1 + crop_w, y1 + crop_h))
-            # disparity = disparity[y1:y1 + crop_h, x1:x1 + crop_w]
+            # disparity = disparity.crop((x1, y1, x1 + crop_w, y1 + crop_h))
+            disparity = disparity[y1:y1 + crop_h, x1:x1 + crop_w]
             
             left_img = np.ascontiguousarray(left_img, dtype=np.float32)
             right_img = np.ascontiguousarray(right_img, dtype=np.float32)
@@ -89,25 +90,27 @@ class DSEC_png_Dataset(Dataset):
                    "right": right_img,
                    "disparity": disparity}
         else:
-            w, h = left_img.size
-            h1 = h % 64
-            w1 = w % 64
-            h1 = h  - h1
-            w1 =  w - w1
-            h1 = int(h1)
-            w1 = int(w1)
-
-            left_img = left_img.resize((w1, h1),Image.Resampling.LANCZOS)   # Resize using Lanczos resampling
-            right_img = right_img.resize((w1, h1),Image.Resampling.LANCZOS)
-            disparity = disparity.resize((w1, h1),Image.Resampling.LANCZOS)
-            
+            # w, h = left_img.size
+            # h1 = h % 64
+            # w1 = w % 64
+            # h1 = h - h1
+            # w1 = w - w1
+            # h1 = int(h1)
+            # w1 = int(w1)
+            # # print(h1, w1)
+            # left_img = left_img.resize((w1, h1), Image.Resampling.LANCZOS)   # Resize using Lanczos resampling
+            # right_img = right_img.resize((w1, h1), Image.Resampling.LANCZOS)
+            # disparity = disparity.resize((w1, h1), Image.Resampling.LANCZOS)
+            left_img = left_img.crop((0, 0, 640, 448))
+            right_img = right_img.crop((0, 0, 640, 448))
+            disparity = disparity[0:448, 0:640]
             left_img = np.ascontiguousarray(left_img, dtype=np.float32)
             right_img = np.ascontiguousarray(right_img, dtype=np.float32)
             disparity = np.ascontiguousarray(disparity, dtype=np.float32)
             preprocess = get_transform()    # get_transform()函数返回一个转换列表，它将图像转换为 PyTorch 张量
             left_img = preprocess(left_img)
             right_img = preprocess(right_img)
-            disparity = preprocess(disparity)
+            # disparity = preprocess(disparity)
             
             disparity = np.expand_dims(disparity, 0)
             

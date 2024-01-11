@@ -29,8 +29,8 @@ import numpy as np
 import math
 import copy
 import sys
-sys.path.append('/root/BGNet/models')
-from models import *
+# sys.path.append('/root/BGNet/models')
+# from models import *
 from PIL import Image
 from datasets.data_io import get_transform
 
@@ -56,7 +56,7 @@ parser.add_argument('--loadmodel', default= None,
                     help='load model')
 parser.add_argument('--savemodel', default='./',
                     help='save model')
-parser.add_argument('--epochs', type=int, default=300, help='number of epochs to train')
+parser.add_argument('--epochs', type=int, default=233, help='number of epochs to train')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
@@ -72,7 +72,7 @@ StereoDataset = __datasets__[args.dataset]
 
 dsec_train = args.trainlist
 dsec_train_dataset = StereoDataset(datapath, dsec_train, True)
-TrainImgLoader = DataLoader(dsec_train_dataset, batch_size= 16, shuffle=True, num_workers=16, drop_last=False)
+TrainImgLoader = DataLoader(dsec_train_dataset, batch_size= 52, shuffle=True, num_workers=32, drop_last=False)
 
 dsec_test = args.testlist
 dsec_test_dataset = StereoDataset(datapath, dsec_test, False)

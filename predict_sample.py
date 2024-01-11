@@ -24,23 +24,28 @@ import time
 import copy
 
 model = BGNet_Plus().cuda()
-checkpoint = torch.load('models/kitti_15_BGNet_Plus.pth',map_location=lambda storage, loc: storage)
+checkpoint = torch.load('./pretrained_models/checkpoint_230.pth',map_location=lambda storage, loc: storage)
+# checkpoint = torch.load('./pretrained_models/Sceneflow-IRS-BGNet-Plus.pth',map_location=lambda storage, loc: storage)
+
 # checkpoint = torch.load('./finetune_30_dsec.pth',map_location=lambda storage, loc: storage)
 model.load_state_dict(checkpoint) 
 model.eval()
 # left_img = Image.open('sample/im0.png').convert('L')
 # right_img = Image.open('sample/im1.png').convert('L')
 
-left_img = Image.open('/home/zhaoqinghao/DSEC/output/left/000233.png').convert('L')
-right_img = Image.open('/home/zhaoqinghao/DSEC/output/right/000233.png').convert('L')
-disp_true = Image.open('/home/zhaoqinghao/DSEC/output/disp/000233.png').convert('L')
-# left_img = Image.open('/root/KITTI_2015/testing/image_2/000001_10.png').convert('L')
-# right_img = Image.open('/root/KITTI_2015/testing/image_3/000001_10.png').convert('L')
+# left_img = Image.open('/home/zhaoqinghao/DSEC/output/left/000233.png').convert('L')
+# right_img = Image.open('/home/zhaoqinghao/DSEC/output/right/000233.png').convert('L')
+# disp_true = Image.open('/home/zhaoqinghao/DSEC/output/disp/000233.png').convert('L')
+left_img = Image.open('/home/zhaoqinghao/dataset/KITTI_2015/training/image_2/000001_10.png').convert('L')
+right_img = Image.open('/home/zhaoqinghao/dataset/KITTI_2015/training/image_3/000001_10.png').convert('L')
+disp_true = Image.open('/home/zhaoqinghao/dataset/KITTI_2015/training/disp_occ_0/000001_10.png').convert('L')
 w, h = left_img.size
+print(w, h)
 h1 = h % 64
 w1 = w % 64
-h1 = h  - h1
-w1 =  w - w1
+print(w1,h1)
+h1 = h - h1
+w1 = w - w1
 h1 = int(h1)
 w1 = int(w1)
 # left_img = left_img.resize((w1, h1),Image.ANTIALIAS)
@@ -48,10 +53,6 @@ w1 = int(w1)
 left_img = left_img.resize((w1, h1),Image.Resampling.LANCZOS)   # Resize using Lanczos resampling
 right_img = right_img.resize((w1, h1),Image.Resampling.LANCZOS)
 disp_true = disp_true.resize((w1, h1),Image.Resampling.LANCZOS)
-# 使用 NumPy 库的 `ascontiguousarray()` 函数将图像数据转换为连续的数组。
-# 提高数据处理的效率，因为许多 NumPy 的操作在连续的数组上会更快。
-# `dtype=np.float32` 是 `ascontiguousarray()` 函数的一个参数，它定义了新数组的数据类型。
-# 将图像数据的数据类型转换为 `float32`，这是一种单精度浮点数类型，它可以有效地减少内存的使用，同时保持足够的精度。
 left_img = np.ascontiguousarray(left_img, dtype=np.float32)
 right_img = np.ascontiguousarray(right_img, dtype=np.float32)
 disp_true = np.ascontiguousarray(disp_true, dtype=np.float32)
@@ -67,27 +68,19 @@ with torch.no_grad():
     pred,_ = model(imgL.unsqueeze(0).cuda(), imgR.unsqueeze(0).cuda()) 
 # start timing
 time_start=time.time()
-# real run, using no_grad() to reduce memory usage and speed up
-# unsqueeze(0) 将在第一个维度（索引为 0）上增加一个维度
 with torch.no_grad():
     pred,_ = model(left_img.unsqueeze(0).cuda(), right_img.unsqueeze(0).cuda())
 # print time cost
 print('time cost: ',(time.time()-time_start)*1000,'ms')
 print('FPS: ',1/(time.time()-time_start))
 
-# disp_true = disp_true.cuda()
-# print(pred.shape)
-# print(disp_true.shape)
-
 pred_disp = pred.data.cpu()
+# pred_disp = copy.deepcopy(disp_true)
 true_disp = copy.deepcopy(disp_true)
 index = np.argwhere(true_disp > 0)
 disp_true = disp_true.float()  # Convert disp_true to float data type
-disp_true[index[0][:], index[1][:], index[2][:]] = torch.abs(
-    true_disp[index[0][:], index[1][:], index[2][:]] - pred_disp[index[0][:], index[1][:], index[2][:]])
-correct = (disp_true[index[0][:], index[1][:], index[2][:]] < 3) | (
-            disp_true[index[0][:], index[1][:], index[2][:]] < true_disp[
-        index[0][:], index[1][:], index[2][:]] * 0.05)
+disp_true[index[0][:], index[1][:], index[2][:]] = torch.abs(true_disp[index[0][:], index[1][:], index[2][:]] - pred_disp[index[0][:], index[1][:], index[2][:]])
+correct = (disp_true[index[0][:], index[1][:], index[2][:]] < 3) | (disp_true[index[0][:], index[1][:], index[2][:]] < true_disp[index[0][:], index[1][:], index[2][:]] * 0.05)
 torch.cuda.empty_cache()
 acc = (float(torch.sum(correct))/float(len(index[0])))
 print('3-px acc: ',acc*100,'%')
