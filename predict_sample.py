@@ -1,14 +1,8 @@
-# -*- coding: UTF-8 -*-
-# ---------------------------------------------------------------------------
-# Official code of our paper:Bilateral Grid Learning for Stereo Matching Network
-# Written by Bin Xu
-# ---------------------------------------------------------------------------
 from __future__ import print_function, division
-import argparse
 import os
-import torch.backends.cudnn as cudnn
-from torch.utils.data import DataLoader
+# os.environ["CUDA_VISIBLE_DEVICES"]="1"
 import torch.utils.data
+import torch.nn.functional as F
 import time
 from datasets import __datasets__
 import gc
@@ -21,38 +15,27 @@ from datasets.data_io import get_transform
 from models.bgnet import BGNet
 from models.bgnet_plus import BGNet_Plus
 import time
-import copy
 
 model = BGNet_Plus().cuda()
 checkpoint = torch.load('./pretrained_models/checkpoint_230.pth',map_location=lambda storage, loc: storage)
 # checkpoint = torch.load('./pretrained_models/Sceneflow-IRS-BGNet-Plus.pth',map_location=lambda storage, loc: storage)
-
 # checkpoint = torch.load('./finetune_30_dsec.pth',map_location=lambda storage, loc: storage)
 model.load_state_dict(checkpoint) 
 model.eval()
-# left_img = Image.open('sample/im0.png').convert('L')
-# right_img = Image.open('sample/im1.png').convert('L')
 
-# left_img = Image.open('/home/zhaoqinghao/DSEC/output/left/000233.png').convert('L')
-# right_img = Image.open('/home/zhaoqinghao/DSEC/output/right/000233.png').convert('L')
-# disp_true = Image.open('/home/zhaoqinghao/DSEC/output/disp/000233.png').convert('L')
-left_img = Image.open('/home/zhaoqinghao/dataset/KITTI_2015/training/image_2/000001_10.png').convert('L')
-right_img = Image.open('/home/zhaoqinghao/dataset/KITTI_2015/training/image_3/000001_10.png').convert('L')
-disp_true = Image.open('/home/zhaoqinghao/dataset/KITTI_2015/training/disp_occ_0/000001_10.png').convert('L')
-w, h = left_img.size
-print(w, h)
-h1 = h % 64
-w1 = w % 64
-print(w1,h1)
-h1 = h - h1
-w1 = w - w1
-h1 = int(h1)
-w1 = int(w1)
-# left_img = left_img.resize((w1, h1),Image.ANTIALIAS)
-# right_img = right_img.resize((w1, h1),Image.ANTIALIAS)
-left_img = left_img.resize((w1, h1),Image.Resampling.LANCZOS)   # Resize using Lanczos resampling
-right_img = right_img.resize((w1, h1),Image.Resampling.LANCZOS)
-disp_true = disp_true.resize((w1, h1),Image.Resampling.LANCZOS)
+left_img = Image.open('/home/zhaoqinghao/DSEC/output/left/000167.png').convert('L')
+right_img = Image.open('/home/zhaoqinghao/DSEC/output/right/000167.png').convert('L')
+disp_true = Image.open('/home/zhaoqinghao/DSEC/output/disp/000167.png').convert('L')
+left_img = left_img.crop((0, 0, 640, 448))
+right_img = right_img.crop((0, 0, 640, 448))
+disp_true = disp_true.crop((0, 0, 640, 448))
+# left_img = Image.open('/home/zhaoqinghao/dataset/KITTI_2015/training/image_2/000001_10.png').convert('L')
+# right_img = Image.open('/home/zhaoqinghao/dataset/KITTI_2015/training/image_3/000001_10.png').convert('L')
+# disp_true = Image.open('/home/zhaoqinghao/dataset/KITTI_2015/training/disp_occ_0/000001_10.png').convert('L')
+# left_img = left_img.crop((0, 0, 1216, 320))
+# right_img = right_img.crop((0, 0, 1216, 320))
+# disp_true = disp_true.crop((0, 0, 1216, 320))
+
 left_img = np.ascontiguousarray(left_img, dtype=np.float32)
 right_img = np.ascontiguousarray(right_img, dtype=np.float32)
 disp_true = np.ascontiguousarray(disp_true, dtype=np.float32)
@@ -74,16 +57,37 @@ with torch.no_grad():
 print('time cost: ',(time.time()-time_start)*1000,'ms')
 print('FPS: ',1/(time.time()-time_start))
 
-pred_disp = pred.data.cpu()
-# pred_disp = copy.deepcopy(disp_true)
-true_disp = copy.deepcopy(disp_true)
-index = np.argwhere(true_disp > 0)
-disp_true = disp_true.float()  # Convert disp_true to float data type
-disp_true[index[0][:], index[1][:], index[2][:]] = torch.abs(true_disp[index[0][:], index[1][:], index[2][:]] - pred_disp[index[0][:], index[1][:], index[2][:]])
-correct = (disp_true[index[0][:], index[1][:], index[2][:]] < 3) | (disp_true[index[0][:], index[1][:], index[2][:]] < true_disp[index[0][:], index[1][:], index[2][:]] * 0.05)
-torch.cuda.empty_cache()
-acc = (float(torch.sum(correct))/float(len(index[0])))
-print('3-px acc: ',acc*100,'%')
+disp_true = torch.squeeze(disp_true, 1)
+disp_pred = pred.data.cpu()
+mask = disp_true > 0
+
+def D1_metric(D_est, D_gt, mask):
+    D_est, D_gt = D_est[mask], D_gt[mask]
+    E = torch.abs(D_gt - D_est)
+    err_mask = (E > 3) & (E / D_gt.abs() > 0.05)
+    return torch.mean(err_mask.float())
+
+def Thres_metric(D_est, D_gt, mask, thres):
+    assert isinstance(thres, (int, float))
+    D_est, D_gt = D_est[mask], D_gt[mask]
+    E = torch.abs(D_gt - D_est)
+    err_mask = E > thres
+    return torch.mean(err_mask.float())
+
+# NOTE: please do not use this to build up training loss
+def EPE_metric(D_est, D_gt, mask):
+    D_est, D_gt = D_est[mask], D_gt[mask]
+    return F.l1_loss(D_est, D_gt, size_average=True)
+
+# End Point Error (EPE)
+print('EPE: ', EPE_metric(disp_pred, disp_true, mask).item())
+# percentage of disparity outliers D1, errors greater than max(3px, 0.05d∗)
+print('D1: ',D1_metric(disp_pred, disp_true, mask).item() * 100, '%')
+# errors larger than 1 pixels (1 pixel error / bad 1.0)
+print('1-px err: ', Thres_metric(disp_pred, disp_true, mask, 1).item() * 100, '%')
+print('2-px err: ', Thres_metric(disp_pred, disp_true, mask, 2).item() * 100, '%')
+print('3-px err: ', Thres_metric(disp_pred, disp_true, mask, 3).item() * 100, '%')
 # save disp
 pred = pred[0].data.cpu().numpy() * 256
 skimage.io.imsave('sample_disp.png',pred.astype('uint16'))
+
