@@ -5,3 +5,4 @@ sample_disp.png
 finetune_*.pth
 checkpoint_*.pth
 log/
+*.pyc
