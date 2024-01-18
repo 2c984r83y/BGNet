@@ -6,3 +6,4 @@ finetune_*.pth
 checkpoint_*.pth
 log/
 *.pyc
+*.ckpt

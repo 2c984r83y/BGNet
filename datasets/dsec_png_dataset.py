@@ -84,7 +84,7 @@ class DSEC_png_Dataset(Dataset):
             preprocess = get_transform()
             left_img = preprocess(left_img)
             right_img = preprocess(right_img)
-            disparity = np.expand_dims(disparity, 0)
+            
             # return [left_img,right_img],-disparity
             return {"left": left_img,
                    "right": right_img,
@@ -99,9 +99,7 @@ class DSEC_png_Dataset(Dataset):
             preprocess = get_transform()    # get_transform()函数返回一个转换列表，它将图像转换为 PyTorch 张量
             left_img = preprocess(left_img)
             right_img = preprocess(right_img)
-            disparity = preprocess(disparity)
-            
-            disparity = np.expand_dims(disparity, 0)
+
             
             # return [left_img,right_img],-disparity
             return {"left": left_img,

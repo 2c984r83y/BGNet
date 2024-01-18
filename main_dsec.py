@@ -8,6 +8,7 @@ import time
 from datasets import __datasets__
 from models.bgnet import BGNet
 from models.bgnet_plus import BGNet_Plus
+from utils import *
 import torch
 import torch.optim as optim
 import torch.utils.data
@@ -27,6 +28,8 @@ parser.add_argument('--trainlist', default='/home/zhaoqinghao/DSEC/train.txt',
 parser.add_argument('--testlist', default='/home/zhaoqinghao/DSEC/test.txt', 
                     help='testing list')
 parser.add_argument('--epochs', type=int, default=300, help='number of epochs to train')
+parser.add_argument('--lr', type=float, default=0.001, help='base learning rate')
+parser.add_argument('--lrepochs',default="200:10", type=str,  help='the epochs to decay lr: the downscale rate')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
@@ -65,7 +68,7 @@ elif args.model == 'bgnet_plus':
 
 if args.cuda:
     model.cuda()
-optimizer = optim.Adam(model.parameters(), lr=0.001, betas=(0.9, 0.999), weight_decay=1e-4)
+optimizer = optim.Adam(model.parameters(), lr=args.lr, betas=(0.9, 0.999), weight_decay=1e-4)
 
 # load parameters
 start_epoch = 0
@@ -87,33 +90,60 @@ elif args.loadckpt:
     model.load_state_dict(state_dict['model'])
 print("start at epoch {}".format(start_epoch))
 
+def train_sample(imgL, imgR, disp_L, compute_metrics=False):
+    model.train()
+    if args.cuda:
+        imgL, imgR, disp_gt = imgL.cuda(), imgR.cuda(), disp_L.cuda()
+    optimizer.zero_grad()
+    disp_ests, _ = model(imgL, imgR)
+    mask = (disp_gt > 0)
+    loss = F.smooth_l1_loss(disp_ests[mask], disp_gt[mask], size_average=True)
+    scalar_outputs = {"loss": loss}
+    image_outputs = {"disp_est": disp_ests, "disp_gt": disp_gt, "imgL": imgL, "imgR": imgR}
+    if compute_metrics:
+        with torch.no_grad():
+            image_outputs["errormap"] = disp_error_image_func.apply(disp_ests, disp_gt)
+            scalar_outputs["EPE"] = EPE_metric(disp_ests, disp_gt, mask)
+            scalar_outputs["D1"] = D1_metric(disp_ests, disp_gt, mask)
+            scalar_outputs["Thres1"] = Thres_metric(disp_ests, disp_gt, mask, 1.0) 
+            scalar_outputs["Thres2"] = Thres_metric(disp_ests, disp_gt, mask, 2.0) 
+            scalar_outputs["Thres3"] = Thres_metric(disp_ests, disp_gt, mask, 3.0)
+    loss.backward()
+    optimizer.step()
+    return tensor2float(loss), tensor2float(scalar_outputs), image_outputs
 def train(imgL, imgR, disp_L):
     model.train()
     if args.cuda:
-        imgL, imgR, disp_true = imgL.cuda(), imgR.cuda(), disp_L.cuda()
+        imgL, imgR, disp_gt = imgL.cuda(), imgR.cuda(), disp_L.cuda()
     optimizer.zero_grad()
-    output, _ = model(imgL, imgR)
-    disp_true = torch.squeeze(disp_true, 0)
-    disp_true = torch.squeeze(disp_true, 1)
-    mask = (disp_true > 0)
-    mask.detach_()
-    loss = F.smooth_l1_loss(output[mask], disp_true[mask], size_average=True)
+    disp_ests, _ = model(imgL, imgR)
+    mask = (disp_gt > 0)
+    loss = F.smooth_l1_loss(disp_ests[mask], disp_gt[mask], size_average=True)
     loss.backward()
     optimizer.step()
     return loss.data
 
-def test(imgL,imgR,disp_true):
+def test(imgL,imgR,disp_gt):
     model.eval()
     with torch.no_grad():
-        pred,_ = model(imgL.cuda(), imgR.cuda())
-    disp_pred = pred.data.cpu()
-    disp_true = torch.squeeze(disp_true, 1)
-    disp_true = torch.squeeze(disp_true, 1)
-    mask = disp_true > 0
-    disp_pred, disp_true = disp_pred[mask], disp_true[mask]
-    E = torch.abs(disp_true - disp_pred)
-    err_mask = E > 3
-    return torch.mean(err_mask.float()).item()
+        disp_ests,_ = model(imgL.cuda(), imgR.cuda())
+    mask = (disp_gt > 0)
+
+    disp_gt = disp_gt.cuda()
+    loss = F.smooth_l1_loss(disp_ests[mask], disp_gt[mask], size_average=True)
+    
+    scalar_outputs = {"loss": loss}
+    image_outputs = {"disp_est": disp_ests, "disp_gt": disp_gt, "imgL": imgL, "imgR": imgR}
+    with torch.no_grad():
+        image_outputs["errormap"] = disp_error_image_func.apply(disp_ests, disp_gt)
+        scalar_outputs["EPE"] = EPE_metric(disp_ests, disp_gt, mask)
+        scalar_outputs["D1"] = D1_metric(disp_ests, disp_gt, mask)
+        scalar_outputs["Thres1"] = Thres_metric(disp_ests, disp_gt, mask, 1.0) 
+        scalar_outputs["Thres2"] = Thres_metric(disp_ests, disp_gt, mask, 2.0) 
+        scalar_outputs["Thres3"] = Thres_metric(disp_ests, disp_gt, mask, 3.0)
+    # return loss.data
+    return tensor2float(loss), tensor2float(scalar_outputs), image_outputs
+
 
 def adjust_learning_rate(optimizer, epoch):
     if epoch <= 200:
@@ -130,6 +160,7 @@ def main():
     start_full_time = time.time()
     for epoch in range(start_epoch, args.epochs + 1):
         print('This is %d-th epoch' %(epoch))
+        # adjust_learning_rate(optimizer, epoch, args.lr, args.lrepochs)
         adjust_learning_rate(optimizer, epoch)
         # TRAIN
         total_train_loss = 0
@@ -138,23 +169,39 @@ def main():
             start_time = time.time()
             imgL, imgR, disp_L = sample['left'], sample['right'], sample['disparity']
             loss = train(imgL.cuda(), imgR.cuda(), disp_L.cuda())
-            do_summary = global_step % args.summary_freq == 0
-            if do_summary:
-                logger.add_scalar('train_loss', loss, global_step)
-            print('Iter %d training loss = %.3f , time = %.2f' %(batch_idx, loss, time.time() - start_time))
+            # loss, scalar_outputs, image_outputs = train_sample(imgL.cuda(), imgR.cuda(), disp_L.cuda(), False)
+            # do_summary = global_step % args.summary_freq == 0
+            # if do_summary:
+            #     logger.add_scalar('train_loss', loss, global_step)
+            #     save_scalars(logger, 'train', scalar_outputs, global_step)
+            #     save_images(logger, 'train', image_outputs, global_step)
+            # del scalar_outputs, image_outputs
+            print('Epoch {}/{}, Iter {}/{}, train loss = {:.3f}, time = {:.3f}'.format(epoch, args.epochs,
+                                                                                       batch_idx,
+                                                                                       len(TrainImgLoader) - 1, loss,
+                                                                                       time.time() - start_time))
             total_train_loss += loss
         logger.add_scalar('epoch_train_loss', loss, epoch)
         print('epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TrainImgLoader)))
         # TEST
-        total_test_loss = 0
+        avg_test_scalars = AverageMeterDict()
         for batch_idx, sample in enumerate(TestImgLoader):
             imgL, imgR, disp_L = sample['left'], sample['right'], sample['disparity']
-            test_loss = test(imgL, imgR, disp_L)
-            print('Iter %d 3-px err in val = %.3f' %(batch_idx, test_loss*100))
-            total_test_loss += test_loss
-        avg_test_loss = total_test_loss / len(TestImgLoader)
-        logger.add_scalar('test loss', test_loss, epoch)
-        print('epoch %d avg 3-px err in val = %.3f' %(epoch, avg_test_loss*100))
+            start_time = time.time()
+            loss, scalar_outputs, image_outputs = test(imgL,imgR,disp_L)
+            save_scalars(logger, 'test', scalar_outputs, global_step)
+            save_images(logger, 'test', image_outputs, global_step)
+            avg_test_scalars.update(scalar_outputs)
+            err_3px = scalar_outputs["Thres3"]
+            del scalar_outputs, image_outputs
+            print('Epoch {}/{}, Iter {}/{}, test loss = {:.3f}, time = {:3f}'.format(epoch, args.epochs,
+                                                                                        batch_idx,
+                                                                                        len(TestImgLoader), loss,
+                                                                                        time.time() - start_time))
+        avg_test_scalars = avg_test_scalars.mean()
+        save_scalars(logger, 'fulltest', avg_test_scalars, len(TrainImgLoader) * (epoch + 1))
+        logger.add_scalar('test_loss', err_3px, epoch)
+        print("avg_test_scalars", avg_test_scalars)
 
         # # early stopping
         # if avg_test_loss < best_test_loss:

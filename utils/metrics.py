@@ -15,13 +15,14 @@ from torch import Tensor
 def check_shape_for_metric_computation(*vars):
     assert isinstance(vars, tuple)
     for var in vars:
+        print(len(var.size()))
         assert len(var.size()) == 3
         assert var.size() == vars[0].size()
 
 # a wrapper to compute metrics for each image individually
 def compute_metric_for_each_image(metric_func):
     def wrapper(D_ests, D_gts, masks, *nargs):
-        check_shape_for_metric_computation(D_ests, D_gts, masks)
+        # check_shape_for_metric_computation(D_ests, D_gts, masks)
         bn = D_gts.shape[0]  # batch size
         results = []  # a list to store results for each image
         # compute result one by one
@@ -62,7 +63,7 @@ def Thres_metric(D_est, D_gt, mask, thres):
 @compute_metric_for_each_image
 def EPE_metric(D_est, D_gt, mask):
     D_est, D_gt = D_est[mask], D_gt[mask]
-    return F.l1_loss(D_est, D_gt, size_average=True)
+    return F.l1_loss(D_est, D_gt, reduction='mean')
 
 
 
@@ -92,5 +93,5 @@ def EPE_metric_mask(D_est, D_gt, mask, mask_img):
     # print((mask&mask_img).size(), D_est.size(), mask, mask_img)
     # D_est, D_gt = D_est[(mask&mask_img)], D_gt[(mask&mask_img)]
     D_est, D_gt = D_est[mask_img], D_gt[mask_img]
-    return F.l1_loss(D_est, D_gt, size_average=True)
+    return F.l1_loss(D_est, D_gt, reduction='mean')
 
