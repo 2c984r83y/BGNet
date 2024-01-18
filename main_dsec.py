@@ -21,9 +21,7 @@ parser.add_argument('--model', default='bgnet_plus', help='select a model struct
 parser.add_argument('--dataset', default='dsec_png', help='dataset name', choices=__datasets__.keys())
 parser.add_argument('--datapath', default='/home/zhaoqinghao/dataset/DSEC/output',
                     help='datapath')
-parser.add_argument('--savepath', default='/disk2/users/M22_zhaoqinghao/BGNet/output/', 
-                    help='save path')
-parser.add_argument('--trainlist', default='/home/zhaoqinghao/DSEC/train.txt', 
+parser.add_argument('--trainlist', default='/home/zhaoqinghao/DSEC/test.txt', 
                     help='training list')
 parser.add_argument('--testlist', default='/home/zhaoqinghao/DSEC/test.txt', 
                     help='testing list')
@@ -38,7 +36,7 @@ parser.add_argument('--summary_freq', type=int, default=20, help='the frequency 
 parser.add_argument('--save_freq', type=int, default=10, help='the frequency of saving checkpoint')
 parser.add_argument('--logdir',default='./log/', help='the directory to save logs and checkpoints')
 parser.add_argument('--loadckpt', default=None, help='load the weights from a specific checkpoint')
-parser.add_argument('--resume', default=True, action='store_true', help='continue training the model')
+parser.add_argument('--resume', default=False, action='store_true', help='continue training the model')
 parser.add_argument('--patience', type=int, default=10, help='Number of epochs with no improvement after which training will be stopped.')
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -59,7 +57,7 @@ TrainImgLoader = DataLoader(dsec_train_dataset, batch_size= 32, shuffle=True, nu
 
 dsec_test = args.testlist
 dsec_test_dataset = StereoDataset(datapath, dsec_test, False)
-TestImgLoader = DataLoader(dsec_test_dataset, batch_size= 16, shuffle=False, num_workers=4, drop_last=False)
+TestImgLoader = DataLoader(dsec_test_dataset, batch_size= 16, shuffle=False, num_workers=16, drop_last=False)
 
 if args.model == 'bgnet':
     model = BGNet().cuda()
@@ -90,27 +88,49 @@ elif args.loadckpt:
     model.load_state_dict(state_dict['model'])
 print("start at epoch {}".format(start_epoch))
 
-def train_sample(imgL, imgR, disp_L, compute_metrics=False):
-    model.train()
-    if args.cuda:
-        imgL, imgR, disp_gt = imgL.cuda(), imgR.cuda(), disp_L.cuda()
-    optimizer.zero_grad()
-    disp_ests, _ = model(imgL, imgR)
-    mask = (disp_gt > 0)
-    loss = F.smooth_l1_loss(disp_ests[mask], disp_gt[mask], size_average=True)
-    scalar_outputs = {"loss": loss}
-    image_outputs = {"disp_est": disp_ests, "disp_gt": disp_gt, "imgL": imgL, "imgR": imgR}
-    if compute_metrics:
-        with torch.no_grad():
-            image_outputs["errormap"] = disp_error_image_func.apply(disp_ests, disp_gt)
-            scalar_outputs["EPE"] = EPE_metric(disp_ests, disp_gt, mask)
-            scalar_outputs["D1"] = D1_metric(disp_ests, disp_gt, mask)
-            scalar_outputs["Thres1"] = Thres_metric(disp_ests, disp_gt, mask, 1.0) 
-            scalar_outputs["Thres2"] = Thres_metric(disp_ests, disp_gt, mask, 2.0) 
-            scalar_outputs["Thres3"] = Thres_metric(disp_ests, disp_gt, mask, 3.0)
-    loss.backward()
-    optimizer.step()
-    return tensor2float(loss), tensor2float(scalar_outputs), image_outputs
+# def train_sample(imgL, imgR, disp_L, compute_metrics=False):
+#     model.train()
+#     if args.cuda:
+#         imgL, imgR, disp_gt = imgL.cuda(), imgR.cuda(), disp_L.cuda()
+#     optimizer.zero_grad()
+#     disp_ests, _ = model(imgL, imgR)
+#     mask = (disp_gt > 0)
+#     loss = F.smooth_l1_loss(disp_ests[mask], disp_gt[mask], size_average=True)
+#     scalar_outputs = {"loss": loss}
+#     image_outputs = {"disp_est": disp_ests, "disp_gt": disp_gt, "imgL": imgL, "imgR": imgR}
+#     if compute_metrics:
+#         with torch.no_grad():
+#             image_outputs["errormap"] = disp_error_image_func.apply(disp_ests, disp_gt)
+#             scalar_outputs["EPE"] = EPE_metric(disp_ests, disp_gt, mask)
+#             scalar_outputs["D1"] = D1_metric(disp_ests, disp_gt, mask)
+#             scalar_outputs["Thres1"] = Thres_metric(disp_ests, disp_gt, mask, 1.0) 
+#             scalar_outputs["Thres2"] = Thres_metric(disp_ests, disp_gt, mask, 2.0) 
+#             scalar_outputs["Thres3"] = Thres_metric(disp_ests, disp_gt, mask, 3.0)
+#     loss.backward()
+#     optimizer.step()
+#     return tensor2float(loss), tensor2float(scalar_outputs), image_outputs
+
+# def test_sample(imgL,imgR,disp_gt):
+#     model.eval()
+#     with torch.no_grad():
+#         disp_ests,_ = model(imgL.cuda(), imgR.cuda())
+#     mask = (disp_gt > 0)
+
+#     disp_gt = disp_gt.cuda()
+#     loss = F.smooth_l1_loss(disp_ests[mask], disp_gt[mask], reduction='mean')
+    
+#     scalar_outputs = {"loss": loss}
+#     image_outputs = {"disp_est": disp_ests, "disp_gt": disp_gt, "imgL": imgL, "imgR": imgR}
+#     with torch.no_grad():
+#         image_outputs["errormap"] = disp_error_image_func.apply(disp_ests, disp_gt)
+#         scalar_outputs["EPE"] = EPE_metric(disp_ests, disp_gt, mask)
+#         scalar_outputs["D1"] = D1_metric(disp_ests, disp_gt, mask)
+#         scalar_outputs["Thres1"] = Thres_metric(disp_ests, disp_gt, mask, 1.0)
+#         scalar_outputs["Thres2"] = Thres_metric(disp_ests, disp_gt, mask, 2.0)
+#         scalar_outputs["Thres3"] = Thres_metric(disp_ests, disp_gt, mask, 3.0)
+#     # return loss.data
+#     return tensor2float(loss), tensor2float(scalar_outputs), image_outputs
+
 def train(imgL, imgR, disp_L):
     model.train()
     if args.cuda:
@@ -118,7 +138,7 @@ def train(imgL, imgR, disp_L):
     optimizer.zero_grad()
     disp_ests, _ = model(imgL, imgR)
     mask = (disp_gt > 0)
-    loss = F.smooth_l1_loss(disp_ests[mask], disp_gt[mask], size_average=True)
+    loss = F.smooth_l1_loss(disp_ests[mask], disp_gt[mask], reduction='mean')
     loss.backward()
     optimizer.step()
     return loss.data
@@ -130,20 +150,8 @@ def test(imgL,imgR,disp_gt):
     mask = (disp_gt > 0)
 
     disp_gt = disp_gt.cuda()
-    loss = F.smooth_l1_loss(disp_ests[mask], disp_gt[mask], size_average=True)
-    
-    scalar_outputs = {"loss": loss}
-    image_outputs = {"disp_est": disp_ests, "disp_gt": disp_gt, "imgL": imgL, "imgR": imgR}
-    with torch.no_grad():
-        image_outputs["errormap"] = disp_error_image_func.apply(disp_ests, disp_gt)
-        scalar_outputs["EPE"] = EPE_metric(disp_ests, disp_gt, mask)
-        scalar_outputs["D1"] = D1_metric(disp_ests, disp_gt, mask)
-        scalar_outputs["Thres1"] = Thres_metric(disp_ests, disp_gt, mask, 1.0) 
-        scalar_outputs["Thres2"] = Thres_metric(disp_ests, disp_gt, mask, 2.0) 
-        scalar_outputs["Thres3"] = Thres_metric(disp_ests, disp_gt, mask, 3.0)
-    # return loss.data
-    return tensor2float(loss), tensor2float(scalar_outputs), image_outputs
-
+    err_3px = Thres_metric(disp_ests, disp_gt, mask, 3.0)
+    return err_3px.data
 
 def adjust_learning_rate(optimizer, epoch):
     if epoch <= 200:
@@ -168,7 +176,9 @@ def main():
             global_step = len(TrainImgLoader) * epoch + batch_idx
             start_time = time.time()
             imgL, imgR, disp_L = sample['left'], sample['right'], sample['disparity']
+            
             loss = train(imgL.cuda(), imgR.cuda(), disp_L.cuda())
+            
             # loss, scalar_outputs, image_outputs = train_sample(imgL.cuda(), imgR.cuda(), disp_L.cuda(), False)
             # do_summary = global_step % args.summary_freq == 0
             # if do_summary:
@@ -176,33 +186,42 @@ def main():
             #     save_scalars(logger, 'train', scalar_outputs, global_step)
             #     save_images(logger, 'train', image_outputs, global_step)
             # del scalar_outputs, image_outputs
+            
             print('Epoch {}/{}, Iter {}/{}, train loss = {:.3f}, time = {:.3f}'.format(epoch, args.epochs,
                                                                                        batch_idx,
                                                                                        len(TrainImgLoader) - 1, loss,
                                                                                        time.time() - start_time))
             total_train_loss += loss
-        logger.add_scalar('epoch_train_loss', loss, epoch)
-        print('epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TrainImgLoader)))
+        logger.add_scalar('train_loss', loss, epoch)
+        print('Epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TrainImgLoader)))
         # TEST
-        avg_test_scalars = AverageMeterDict()
+        # avg_test_scalars = AverageMeterDict()
+        total_test_loss = 0
         for batch_idx, sample in enumerate(TestImgLoader):
             imgL, imgR, disp_L = sample['left'], sample['right'], sample['disparity']
             start_time = time.time()
-            loss, scalar_outputs, image_outputs = test(imgL,imgR,disp_L)
-            save_scalars(logger, 'test', scalar_outputs, global_step)
-            save_images(logger, 'test', image_outputs, global_step)
-            avg_test_scalars.update(scalar_outputs)
-            err_3px = scalar_outputs["Thres3"]
-            del scalar_outputs, image_outputs
+            
+            # loss, scalar_outputs, image_outputs = test_sample(imgL,imgR,disp_L)
+            # save_scalars(logger, 'test', scalar_outputs, global_step)
+            # save_images(logger, 'test', image_outputs, global_step)
+            # avg_test_scalars.update(scalar_outputs)
+            # del scalar_outputs, image_outputs
+            
+            test_loss = test(imgL.cuda(), imgR.cuda(), disp_L.cuda())
+            total_test_loss += test_loss
+            
             print('Epoch {}/{}, Iter {}/{}, test loss = {:.3f}, time = {:3f}'.format(epoch, args.epochs,
                                                                                         batch_idx,
                                                                                         len(TestImgLoader), loss,
                                                                                         time.time() - start_time))
-        avg_test_scalars = avg_test_scalars.mean()
-        save_scalars(logger, 'fulltest', avg_test_scalars, len(TrainImgLoader) * (epoch + 1))
-        logger.add_scalar('test_loss', err_3px, epoch)
-        print("avg_test_scalars", avg_test_scalars)
-
+        # avg_test_scalars = avg_test_scalars.mean()
+        # save_scalars(logger, 'fulltest', avg_test_scalars, len(TrainImgLoader) * (epoch + 1))
+        # print("avg_test_scalars", avg_test_scalars)
+        
+        avg_test_loss = total_test_loss / len(TestImgLoader)
+        logger.add_scalar('test_loss_3px', avg_test_loss, epoch)
+        print('Epoch %d avg 3-px err in val = %.3f' %(epoch, avg_test_loss*100))
+        
         # # early stopping
         # if avg_test_loss < best_test_loss:
         #     best_test_loss = avg_test_loss
@@ -220,7 +239,7 @@ def main():
         gc.collect()
 
 
-    print('MAX epoch %d total test err = %.3f' %(epoch, best_test_loss))
+    # print('MAX epoch %d total test err = %.3f' %(epoch, best_test_loss))
     print('full train time = %.2f HR' %((time.time() - start_full_time)/3600))
 
 if __name__ == '__main__':
