@@ -25,6 +25,8 @@ parser.add_argument('--trainlist', default='/home/zhaoqinghao/DSEC/test.txt',
                     help='training list')
 parser.add_argument('--testlist', default='/home/zhaoqinghao/DSEC/test.txt', 
                     help='testing list')
+parser.add_argument('--batch_size', type=int, default=32, help='training batch size')
+parser.add_argument('--test_batch_size', type=int, default=16, help='testing batch size')
 parser.add_argument('--epochs', type=int, default=300, help='number of epochs to train')
 parser.add_argument('--lr', type=float, default=0.001, help='base learning rate')
 parser.add_argument('--lrepochs',default="200:10", type=str,  help='the epochs to decay lr: the downscale rate')
@@ -53,11 +55,11 @@ StereoDataset = __datasets__[args.dataset]
 
 dsec_train = args.trainlist
 dsec_train_dataset = StereoDataset(datapath, dsec_train, True)
-TrainImgLoader = DataLoader(dsec_train_dataset, batch_size= 32, shuffle=True, num_workers=32, drop_last=False)
+TrainImgLoader = DataLoader(dsec_train_dataset, batch_size= args.batch_size, shuffle=True, num_workers=32, drop_last=False)
 
 dsec_test = args.testlist
 dsec_test_dataset = StereoDataset(datapath, dsec_test, False)
-TestImgLoader = DataLoader(dsec_test_dataset, batch_size= 16, shuffle=False, num_workers=16, drop_last=False)
+TestImgLoader = DataLoader(dsec_test_dataset, batch_size= args.test_batch_size, shuffle=False, num_workers=16, drop_last=False)
 
 if args.model == 'bgnet':
     model = BGNet().cuda()

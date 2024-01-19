@@ -17,11 +17,10 @@ import gc
 parser = argparse.ArgumentParser(description='BGNet')
 parser.add_argument('--model', default='bgnet_plus', help='select a model structure')
 parser.add_argument('--dataset', default='dsec_png', help='dataset name', choices=__datasets__.keys())
-parser.add_argument('--datapath', default='/home/zhaoqinghao/dataset/DSEC/output',
-                    help='datapath')
-parser.add_argument('--testlist', default='/home/zhaoqinghao/DSEC/test.txt', 
-                    help='testing list')
-parser.add_argument('--loadckpt', default='./pretrained_models/checkpoint_000300.ckpt', help='load the weights from a specific checkpoint')
+parser.add_argument('--datapath', default='/home/zhaoqinghao/dataset/DSEC/output',help='datapath')
+parser.add_argument('--testlist', default='/home/zhaoqinghao/DSEC/test.txt', help='testing list')
+parser.add_argument('--loadckpt', default='./pretrained_models/checkpoint_000300.ckpt', 
+                    help='load the weights from a specific checkpoint')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
 args = parser.parse_args()
@@ -78,11 +77,16 @@ def main():
             # save_images(logger, 'test', image_outputs, batch_idx)
             avg_test_scalars.update(scalar_outputs)
             del scalar_outputs, image_outputs
-            print('Iter {}/{}, test loss = {:.3f}, time = {:3f}'.format(batch_idx,
+            print('Iter {}/{}, test loss = {:.3f}, time = {:3f}'.format(batch_idx + 1,
                                                                         len(TestImgLoader), loss,
                                                                         time.time() - start_time))
         avg_test_scalars = avg_test_scalars.mean()
-        print("avg_test_scalars", avg_test_scalars)
-
+        
+        print("EPE", avg_test_scalars["EPE"])
+        print("D1", avg_test_scalars["D1"] * 100, "%")
+        print("Thres1", avg_test_scalars["Thres1"] * 100, "%")
+        print("Thres2", avg_test_scalars["Thres2"] * 100, "%")
+        print("Thres3", avg_test_scalars["Thres3"] * 100, "%")
+        
 if __name__ == '__main__':
    main()
