@@ -9,9 +9,7 @@ from torch.utils.data import Dataset
 from PIL import Image
 import numpy as np
 from datasets.data_io import get_transform, read_all_lines
-import cv2
-import torchvision
-from PIL import ImageFilter
+
 class DSEC_png_Dataset(Dataset):
     def __init__(self, datapath, list_filename, training):
         self.datapath = datapath

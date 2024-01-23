@@ -12,7 +12,6 @@ from utils import *
 import torch
 import torch.utils.data
 import torch.nn.functional as F
-import gc
 
 parser = argparse.ArgumentParser(description='BGNet')
 parser.add_argument('--model', default='bgnet_plus', help='select a model structure')
