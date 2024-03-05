@@ -16,14 +16,12 @@ import time
 class Slice(SubModule):
     def __init__(self):
         super(Slice, self).__init__()
-    
     def forward(self, bilateral_grid, wg, hg, guidemap): 
         guidemap = guidemap.permute(0,2,3,1).contiguous() #[B,C,H,W]-> [B,H,W,C]
-        guidemap_guide = torch.cat([wg, hg, guidemap], dim=3).unsqueeze(1) # Nx1xHxWx3        
+        guidemap_guide = torch.cat([wg, hg, guidemap], dim=3).unsqueeze(1) # N x 1 x H x W x 3
         coeff = F.grid_sample(bilateral_grid, guidemap_guide,align_corners =False)
         return coeff.squeeze(2) #[B,1,H,W]
-
-       
+    
 class GuideNN(SubModule):
     def __init__(self, params=None):
         super(GuideNN, self).__init__()
@@ -38,7 +36,7 @@ def groupwise_correlation(fea1, fea2, num_groups):
     B, C, H, W = fea1.shape
     assert C % num_groups == 0
     channels_per_group = C // num_groups
-
+    
     cost = (fea1 * fea2).view([B, num_groups, channels_per_group, H, W]).mean(dim=2)
     assert cost.shape == (B, num_groups, H, W)
     return cost
@@ -49,7 +47,7 @@ def build_gwc_volume(refimg_fea, targetimg_fea, maxdisp, num_groups):
     #[B,G,D,H,W]
     volume = refimg_fea.new_zeros([B, num_groups, maxdisp, H, W])
     for i in range(maxdisp):
-        if i > 0:            
+        if i > 0:
             volume[:, :, i, :, i:] = groupwise_correlation(refimg_fea[:, :, :, i:], targetimg_fea[:, :, :, :-i],
                                                            num_groups)
         else:

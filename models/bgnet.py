@@ -25,22 +25,22 @@ class Slice(SubModule):
         guidemap_guide = torch.cat([wg, hg, guidemap], dim=3).unsqueeze(1) # N x 1 x H x W x 3
         coeff = F.grid_sample(bilateral_grid, guidemap_guide,align_corners =False)
         return coeff.squeeze(2) #[B,1,H,W]
-
-# a 3D convolution of 3 ×3×3
+# 32 channels -> 16 channels -> 1 channel
 class GuideNN(SubModule):
     def __init__(self, params=None):
         super(GuideNN, self).__init__()
         self.params = params
-        self.conv1 = convbn_2d_lrelu(32, 16, 1, 1, 0)
-        self.conv2 = convbn_2d_Tanh(16, 1, 1, 1, 0)
+        self.conv1 = convbn_2d_lrelu(32, 16, 1, 1, 0)   # 引入非线性
+        self.conv2 = convbn_2d_Tanh(16, 1, 1, 1, 0)     # 限制在[-1,1]之间
 
     def forward(self, x):
-        return self.conv2(self.conv1(x)) 
-# 计算 cost
+        return self.conv2(self.conv1(x))
+# 计算 correlation
 def groupwise_correlation(fea1, fea2, num_groups):
     B, C, H, W = fea1.shape
     assert C % num_groups == 0
     channels_per_group = C // num_groups
+    
     cost = (fea1 * fea2).view([B, num_groups, channels_per_group, H, W]).mean(dim=2)
     assert cost.shape == (B, num_groups, H, W)
     return cost
@@ -52,7 +52,8 @@ def build_gwc_volume(refimg_fea, targetimg_fea, maxdisp, num_groups):
     volume = refimg_fea.new_zeros([B, num_groups, maxdisp, H, W])
     for i in range(maxdisp):
         if i > 0:
-            volume[:, :, i, :, i:] = groupwise_correlation(refimg_fea[:, :, :, i:], targetimg_fea[:, :, :, :-i],num_groups)
+            volume[:, :, i, :, i:] = groupwise_correlation(refimg_fea[:, :, :, i:], targetimg_fea[:, :, :, :-i],
+                                                           num_groups)
         else:
             volume[:, :, i, :, :] = groupwise_correlation(refimg_fea, targetimg_fea, num_groups)
     volume = volume.contiguous()
@@ -78,31 +79,36 @@ class BGNet(SubModule):
         self.feature_extraction = feature_extraction()
         self.coeffs_disparity_predictor = CoeffsPredictor()
 
-
         self.dres0 = nn.Sequential(convbn_3d_lrelu(44, 32, 3, 1, 1),
                                    convbn_3d_lrelu(32, 16, 3, 1, 1))
         self.guide = GuideNN()
         self.slice = Slice()
         self.weight_init()
 
-
-
-
-
- 
     def forward(self, left_input, right_input):         
-        left_low_level_features_1,  left_gwc_feature  = self.feature_extraction(left_input)
-        _,                          right_gwc_feature = self.feature_extraction(right_input)
-        # 对 1/8 分辨率的 cost volume left_low_level_features_1
-        # GuideNN(), a 3D convolution of 3 ×3×3
-        # Batch size/通道数/高度/宽度
-        guide = self.guide(left_low_level_features_1) #[B,1,H,W]
+        # Fig.2: Feature extraction
+        left_low_level_features_1, left_gwc_feature  = self.feature_extraction(left_input)
+        _,                         right_gwc_feature = self.feature_extraction(right_input)
+        # [Batch size, Channels , Height, Weight]
+        # left_low_level_features_1: [B, 32, H/2, W/2]
+        # left_gwc_feature: [B, 352, H/8, W/8]
+        
+        # Fig.2: Guidance map
+        guide = self.guide(left_low_level_features_1) # [B, 32, H/2, W/2] -> [B, 1, H/2, W/2]
+        
         # torch.cuda.synchronize()
         # start = time.time()
-        #  构建 cost volume, refimg_fea, targetimg_fea, maxdisp, num_groups
-        cost_volume = build_gwc_volume(left_gwc_feature,right_gwc_feature,25,44)
+        
+        #  构建 cost volume: refimg_fea, targetimg_fea, maxdisp, num_groups
+        # [B, 44, 25, H/8, W/8]
+        cost_volume = build_gwc_volume(left_gwc_feature, right_gwc_feature, 25, 44)
+        
+        # Fig.2: 3D convolution
         cost_volume = self.dres0(cost_volume)
-        # coeffs:[B,D,G,H,W] 双边网格 ？
+        
+        # coeffs:[B,D,G,H,W]
+        # [B, 25, 44, H/8, W/8]
+        # HourGlass: 3D conv and 3D deconv
         coeffs = self.coeffs_disparity_predictor(cost_volume)
         # 分割 coeffs 为 25 个视差层，maxdisp = 25
         list_coeffs = torch.split(coeffs,1,dim = 1)
@@ -116,7 +122,7 @@ class BGNet(SubModule):
         index_b = torch.clamp(index_b, min=0, max= 24)
         
         wa = index_b - index_float
-        wb = index_float   - index_a
+        wb = index_float - index_a
 
         list_float = []  
         device = list_coeffs[0].get_device()
@@ -127,9 +133,11 @@ class BGNet(SubModule):
         wb = wb.to(device)
         wa = wa.float()
         wb = wb.float()
-
+        # [B, 1, H/2, W/2]
         N, _, H, W = guide.shape
-        #[H,W]
+        # hg和wg的形状都是(H, W)
+        # 在hg中，每一行的所有元素都是相同的，表示行坐标
+        # 在wg中，每一列的所有元素都是相同的，表示列坐标
         hg, wg = torch.meshgrid([torch.arange(0, H), torch.arange(0, W)]) # [0,511] HxW
         if device >= 0:
             hg = hg.to(device)
@@ -151,7 +159,7 @@ class BGNet(SubModule):
             slice_dict_a.append(slice_dict[inx_a])
             slice_dict_b.append(slice_dict[inx_b])
         
-        # 把0-24的视差范围扩展到0-96，总视差范围应该是192，所以这是一半的特征。不过他的扩展方式很奇怪，给我的感觉就是把25个视差维度特征混合了一下，拼成了97维    
+        # 把0-24的视差范围扩展到0-96，总视差范围应该是192，所以这是一半的特征。不过他的扩展方式很奇怪，给我的感觉就是把25个视差维度特征混合了一下，拼成了97维
         final_cost_volume = wa * torch.cat(slice_dict_a,dim = 1) + wb * torch.cat(slice_dict_b,dim = 1)
         slice = self.softmax(final_cost_volume)
         disparity_samples = torch.arange(0, 97, dtype=slice.dtype, device=slice.device).view(1, 97, 1, 1)

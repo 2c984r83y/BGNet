@@ -29,15 +29,15 @@ class HourGlass(SubModule):
                                          output_padding=(0, 1, 1), stride=(1, 2, 2), bias=False)
         self.last_for_guidance = convbn_3d_lrelu(inplanes, 32, kernel_size=3, stride=1, pad=1)
         self.weight_init()
-#modify from Deeppruner code
+# modify from Deeppruner code
 class CoeffsPredictor(HourGlass):
 
     def __init__(self, hourglass_inplanes=16):
         super(CoeffsPredictor, self).__init__(hourglass_inplanes)
 
     def forward(self, input):
-        output0 = self.conv1(input)
-        output0_a = self.conv2(output0) + output0
+        output0 = self.conv1(input)                 
+        output0_a = self.conv2(output0) + output0   
 
         output0 = self.conv1_1(output0_a)
         output0_c = self.conv2_1(output0) + output0

@@ -4,6 +4,6 @@ nets/__pycache__/
 sample_disp.png
 finetune_*.pth
 checkpoint_*.pth
-log/
+logs
 *.pyc
 *.ckpt

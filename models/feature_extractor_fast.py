@@ -87,12 +87,10 @@ class Conv2x(nn.Module):
             self.conv2 = BasicConv(out_channels*2, out_channels, False, is_3d, bn, relu, kernel_size=3, stride=1, padding=1)
         else:
             self.conv2 = BasicConv(out_channels, out_channels, False, is_3d, bn, relu, kernel_size=3, stride=1, padding=1)
-
+# ! ResNet
     def forward(self, x, rem):
         x = self.conv1(x)
-        # print("feature_extractor_fast.py, line 96, in forward")
-        # print(x.size())
-        # print(rem.size())
+
         assert(x.size() == rem.size())
         if self.concat:
             x = torch.cat((x, rem), 1)
@@ -118,6 +116,9 @@ class feature_extraction(nn.Module):
         # 数据首先通过第一个模块进行卷积、批量归一化和 ReLU 激活操作，
         # 然后通过第二个模块进行同样的操作，最后通过第三个模块进行同样的操作
         # self.firstconv 实现了对输入数据的连续三次卷积、批量归一化和 ReLU 激活操作
+        
+        # stride = 2, img size = img size / 2
+        # three convolution of 3 × 3 kernel with strides of 2, 1, and 1 are used to downsample the input images
         self.firstconv = nn.Sequential(convbn_relu(1, 32, 3, 2, 1, 1),
                                convbn_relu(32, 32, 3, 1, 1, 1),
                                convbn_relu(32, 32, 3, 1, 1, 1))
@@ -135,7 +136,7 @@ class feature_extraction(nn.Module):
 #         self.conv4a = BasicConv(96, 128, kernel_size=3, stride=2, padding=1)
 
 #         self.deconv4a = Conv2x(128, 96, deconv=True)
-        self.deconv3a = Conv2x(96, 64, deconv=True)
+        self.deconv3a = Conv2x(96, 64, deconv=True) #? deconv 如何实现?
         self.deconv2a = Conv2x(64, 48, deconv=True)
         self.deconv1a = Conv2x(48, 32, deconv=True)
 
@@ -166,59 +167,52 @@ class feature_extraction(nn.Module):
 
         return nn.Sequential(*layers)
     def forward(self, x):
-        #1/2
-        x = self.firstconv(x)
+        # three convolution of 3 × 3 kernel with strides of 2, 1, and 1 are used to downsample the input images
+        x = self.firstconv(x)   # 1/2 * 32
+        # four residual layers with strides of 1, 2, 2, and 1 are followed to quickly produce unary features at 1/8 resolution
         x = self.layer1(x)
-        conv0a = x
-        x = self.layer2(x) #1/4
+        conv0a = x          # 1/2 * 32
+        x = self.layer2(x)  # 1/4 * 64
         conv1a = x
-        x = self.layer3(x) #1/8 * 128
+        x = self.layer3(x)  # 1/8 * 128
         feat0 = x
-        x = self.layer4(x) #1/8 * 128
+        x = self.layer4(x)  # 1/8 * 128
         feat1 = x
-        x = self.reduce(x) #1/8 * 32
+        x = self.reduce(x)  # 1/8 * 32
         feat2 = x
         rem0 = x
-        #1/2 * 1/2 * 48
-        x = self.conv1a(x)
+        # ! ResNet architecture
+        x = self.conv1a(x)  # 1/16 * 48
         rem1 = x
-        #1/4 * 1/4 * 64
-        x = self.conv2a(x)
-        # print("rem2",x.shape)
+        x = self.conv2a(x)  # 1/32 * 64
         rem2 = x
-        #1/8 * 1/8 * 96
-        x = self.conv3a(x)
+        x = self.conv3a(x)  # 1/64 * 96
         rem3 = x
-        #1/16 * 1/16 * 128
         # x = self.conv4a(x)
         # rem4 = x
         # x = self.deconv4a(x, rem3)
-        # rem3 = x
-        # print("deconv3a")
-        # print(x.shape)
-        # print(rem2.shape)
-        x = self.deconv3a(x, rem2)
+        x = self.deconv3a(x, rem2)  # 1/32 * 64
         rem2 = x
-        x = self.deconv2a(x, rem1)
+        x = self.deconv2a(x, rem1)  # 1/16 * 48
         rem1 = x
-        x = self.deconv1a(x, rem0)
+        x = self.deconv1a(x, rem0)  # 1/8 * 32
         feat3 = x
         rem0 = x
-        #1/2
-        x = self.conv1b(x, rem1)
+        
+        x = self.conv1b(x, rem1)    # 1/16 * 48
         rem1 = x
-        x = self.conv2b(x, rem2)
+        x = self.conv2b(x, rem2)    # 1/32 * 64
         rem2 = x
-        x = self.conv3b(x, rem3)
+        x = self.conv3b(x, rem3)    # 1/64 * 96
         rem3 = x
-        #1/16
 #         x = self.conv4b(x, rem4)
-
 #         x = self.deconv4b(x, rem3)
-        x = self.deconv3b(x, rem2)
-        x = self.deconv2b(x, rem1)
-        x = self.deconv1b(x, rem0)
+        x = self.deconv3b(x, rem2)  # 1/32 * 64
+        x = self.deconv2b(x, rem1)  # 1/16 * 48
+        x = self.deconv1b(x, rem0)  # 1/8 * 32
         feat4 = x
+        # all the feature maps at 1/8 resolution are concatenated to form feature maps with 352 channels for the generation of the cost volume.
+        # 128 + 128 + 32 + 32 + 32 = 352
         gwc_feature = torch.cat((feat0,feat1,feat2,feat3,feat4),dim = 1)
         return conv0a,gwc_feature
 
