@@ -23,6 +23,10 @@ class Slice(SubModule):
     def forward(self, bilateral_grid, wg, hg, guidemap): 
         guidemap = guidemap.permute(0,2,3,1).contiguous() #[B,C,H,W]-> [B,H,W,C]
         guidemap_guide = torch.cat([wg, hg, guidemap], dim=3).unsqueeze(1) # N x 1 x H x W x 3
+        # torch.nn.functional.grid_sample(input, grid, mode='bilinear', padding_mode='zeros', align_corners=None)
+        # Given an input and a flow-field grid, computes the output using input values and pixel locations from grid.
+        # 提供一个input的Tensor以及一个对应的flow-field网格(比如光流，体素流等)，然后根据grid中每个位置提供的坐标信息(这里指input中pixel的坐标)，
+        # 将input中对应位置的像素值填充到grid指定的位置，得到最终的输出。
         coeff = F.grid_sample(bilateral_grid, guidemap_guide,align_corners =False)
         return coeff.squeeze(2) #[B,1,H,W]
 # 32 channels -> 16 channels -> 1 channel
