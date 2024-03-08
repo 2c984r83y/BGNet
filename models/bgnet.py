@@ -22,12 +22,26 @@ class Slice(SubModule):
         super(Slice, self).__init__()
     def forward(self, bilateral_grid, wg, hg, guidemap): 
         guidemap = guidemap.permute(0,2,3,1).contiguous() #[B,C,H,W]-> [B,H,W,C]
+        # [N, H/2, W/2, 1] [N, H/2, W/2, 1] [N, H/2, W/2, 1]
+        # gudiemap_guide tensor([[[[wg,hg,guidemap], ..., ...]]], [B, H, W, C+C+C]
         guidemap_guide = torch.cat([wg, hg, guidemap], dim=3).unsqueeze(1) # N x 1 x H x W x 3
-        # torch.nn.functional.grid_sample(input, grid, mode='bilinear', padding_mode='zeros', align_corners=None)
-        # Given an input and a flow-field grid, computes the output using input values and pixel locations from grid.
-        # 提供一个input的Tensor以及一个对应的flow-field网格(比如光流，体素流等)，然后根据grid中每个位置提供的坐标信息(这里指input中pixel的坐标)，
-        # 将input中对应位置的像素值填充到grid指定的位置，得到最终的输出。
-        coeff = F.grid_sample(bilateral_grid, guidemap_guide,align_corners =False)
+        """
+        https://pytorch.org/docs/stable/generated/torch.nn.functional.grid_sample.html
+        根据 grid 的坐标在 input 中进行插值(e.g. bilinear interpolation)
+        提供一个input的Tensor以及一个对应的flow-field grid(比如光流，体素流等)
+        然后根据grid中每个位置提供的坐标信息, (这里指input中pixel的坐标)
+        将input中对应位置的像素值填充到grid指定的位置, 得到最终的输出
+        grid[n, h, w] 是一个二维向量，它用于指定输入图像中的像素位置 x 和 y. 这些位置将被用来插值输出值 output[n, :, h, w]。
+        在4D输入的情况下, grid 的形状为 (N, H_out, W_out, 2)，其中：
+        N 是批次大小(batch size)
+        H_out 和 W_out 是输出图像的高度和宽度。
+        2 表示二维向量，其中第一个元素是 x 坐标，第二个元素是 y 坐标。
+        在5D输入的情况下, grid 的形状为 (N, D_out, H_out, W_out, 3)，其中：
+        D_out 是输出图像的深度(depth)。
+        3 表示三维向量，其中前两个元素是 x 和 y 坐标，第三个元素是 z 坐标。
+        [N, 1, 44, H/8, W/8] [N, 1, H/2, W/2, 3]
+        """
+        coeff = F.grid_sample(bilateral_grid, guidemap_guide,align_corners = False)
         return coeff.squeeze(2) #[B,1,H,W]
 # 32 channels -> 16 channels -> 1 channel
 class GuideNN(SubModule):
@@ -115,6 +129,8 @@ class BGNet(SubModule):
         # HourGlass: 3D conv and 3D deconv
         coeffs = self.coeffs_disparity_predictor(cost_volume)
         # 分割 coeffs 为 25 个视差层，maxdisp = 25
+        # list_coeffs是一个包含了多个张量的列表
+        # 每个张量都是coeffs的一个子张量，形状为[B, 1, G, H, W]
         list_coeffs = torch.split(coeffs,1,dim = 1)
         
         index = torch.arange(0,97)  # tensor([ 0 ,..., 96])
@@ -146,12 +162,14 @@ class BGNet(SubModule):
         if device >= 0:
             hg = hg.to(device)
             wg = wg.to(device)
-        #[B,H,W,1]
-        hg = hg.float().repeat(N, 1, 1).unsqueeze(3) / (H-1) * 2 - 1 # norm to [-1,1] NxHxWx1
+        
+        hg = hg.float().repeat(N, 1, 1).unsqueeze(3) / (H-1) * 2 - 1 # norm to [-1,1] NxHxWx1, [B,H,W,1]
         wg = wg.float().repeat(N, 1, 1).unsqueeze(3) / (W-1) * 2 - 1 # norm to [-1,1] NxHxWx1
         slice_dict = []
         # torch.cuda.synchronize()
         # start = time.time()
+        # [B, 1, G, H/8, W/8] [B, H/2, W/2, 1] [B, H/2, W/2, 1] [B, 1, H/2, W/2]
+        # guide 每一次 G(x, y) 是相同的, 但是 bilaterial grid 是不同的
         for i in range(25):
             slice_dict.append(self.slice(list_coeffs[i], wg, hg, guide)) #[B,1,H,W]
         slice_dict_a = []
