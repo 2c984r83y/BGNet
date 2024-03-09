@@ -27,6 +27,7 @@ class Slice(SubModule):
         guidemap_guide = torch.cat([wg, hg, guidemap], dim=3).unsqueeze(1) # N x 1 x H x W x 3
         """
         https://pytorch.org/docs/stable/generated/torch.nn.functional.grid_sample.html
+        https://www.paddlepaddle.org.cn/documentation/docs/zh///api/paddle/nn/functional/grid_sample_cn.html
         根据 grid 的坐标在 input 中进行插值(e.g. bilinear interpolation)
         提供一个input的Tensor以及一个对应的flow-field grid(比如光流，体素流等)
         然后根据grid中每个位置提供的坐标信息, (这里指input中pixel的坐标)
@@ -132,27 +133,7 @@ class BGNet(SubModule):
         # list_coeffs是一个包含了多个张量的列表
         # 每个张量都是coeffs的一个子张量，形状为[B, 1, G, H, W]
         list_coeffs = torch.split(coeffs,1,dim = 1)
-        
-        index = torch.arange(0,97)  # tensor([ 0 ,..., 96])
-        index_float = index/4.0
-        index_a = torch.floor(index_float)
-        index_b = index_a + 1
-        # 限制 index_a, index_b 的范围在 [0,24] 之间
-        index_a = torch.clamp(index_a, min=0, max= 24)
-        index_b = torch.clamp(index_b, min=0, max= 24)
-        
-        wa = index_b - index_float
-        wb = index_float - index_a
-
-        list_float = []  
         device = list_coeffs[0].get_device()
-        # reshape wa, wb to (1,n,1,1)
-        wa  = wa.view(1,-1,1,1)
-        wb  = wb.view(1,-1,1,1)
-        wa = wa.to(device)
-        wb = wb.to(device)
-        wa = wa.float()
-        wb = wb.float()
         # [B, 1, H/2, W/2]
         N, _, H, W = guide.shape
         # hg和wg的形状都是(H, W)
@@ -170,26 +151,55 @@ class BGNet(SubModule):
         # start = time.time()
         # [B, 1, G, H/8, W/8] [B, H/2, W/2, 1] [B, H/2, W/2, 1] [B, 1, H/2, W/2]
         # guide 每一次 G(x, y) 是相同的, 但是 bilaterial grid 是不同的
+        #? 进行三次双线性插值/三线性插值
+        #? 与双边滤波的区别是什么?为什么要命名为双边网格
         for i in range(25):
             slice_dict.append(self.slice(list_coeffs[i], wg, hg, guide)) #[B,1,H,W]
         slice_dict_a = []
         slice_dict_b = []
+        
+        #todo: 理解这个trick
+        # wa,wb 可以将两个相邻的视差维度的特征进行线性插值，从而获得更平滑的成本体积
+        index = torch.arange(0,97)  # tensor([ 0 ,..., 96])
+        index_float = index/4.0
+        index_a = torch.floor(index_float)
+        index_b = index_a + 1
+        # 限制 index_a, index_b 的范围在 [0,24] 之间
+        index_a = torch.clamp(index_a, min=0, max= 24)
+        index_b = torch.clamp(index_b, min=0, max= 24)
+        
+        wa = index_b - index_float
+        wb = index_float - index_a
+
+        list_float = []  
+        
+        # reshape wa, wb to (1,n,1,1)
+        # torch.Size([1, 97, 1, 1])
+        wa  = wa.view(1,-1,1,1)
+        wb  = wb.view(1,-1,1,1)
+        wa = wa.to(device)
+        wb = wb.to(device)
+        wa = wa.float()
+        wb = wb.float()
+        
+        # 把0-24的视差范围扩展到0-96，总视差范围应该是192，所以这是一半的特征。不过他的扩展方式很奇怪，给我的感觉就是把25个视差维度特征混合了一下，拼成了97维
         for i in range(97):
             inx_a = i//4
             inx_b = inx_a + 1
             inx_b  = min(inx_b,24)
             slice_dict_a.append(slice_dict[inx_a])
             slice_dict_b.append(slice_dict[inx_b])
-        
-        # 把0-24的视差范围扩展到0-96，总视差范围应该是192，所以这是一半的特征。不过他的扩展方式很奇怪，给我的感觉就是把25个视差维度特征混合了一下，拼成了97维
+        # 将 0-24 恢复为 0-96
         final_cost_volume = wa * torch.cat(slice_dict_a,dim = 1) + wb * torch.cat(slice_dict_b,dim = 1)
         slice = self.softmax(final_cost_volume)
         disparity_samples = torch.arange(0, 97, dtype=slice.dtype, device=slice.device).view(1, 97, 1, 1)
-        # 把经过代价聚合过程的每个视差等级的feature maps通道压缩成1，每个视差等级只有一个feature map,softmax为每个视差等级都计算一个概率，
-        # 每个像素的视差d乘以改层视差等级的概率，累加得出最后该像素的视差值，从而生成视差图
-        
-        # 最终在[H/2,W/2]的尺寸上预测了0-96的视差概率分布，得到了每个点的预测视差half_disp，然后对2*half_disp进行双线性插值，得到[H,W]尺寸上的每点预测视差
-        disparity_samples = disparity_samples.repeat(slice.size()[0],1,slice.size()[2],slice.size()[3])
+        # 把经过代价聚合过程的每个视差等级的 feature maps 通道压缩成1
+        # 每个视差等级只有一个 feature map, softmax 为每个视差等级都计算一个概率
+        # 每个像素的视差 d 乘以改层视差等级的概率，累加得出最后该像素的视差值，从而生成视差图
+        # 最终在 [H/2,W/2] 的尺寸上预测了 0-96 的视差概率分布，得到了每个点的预测视差 half_disp
+        # 然后对 2*half_disp 进行双线性插值，得到[H,W]尺寸上的每点预测视差
+        disparity_samples = disparity_samples.repeat(slice.size()[0], 1, slice.size()[2], slice.size()[3])
+        # d * softmax(C_H)
         half_disp = torch.sum(disparity_samples * slice,dim = 1).unsqueeze(1)
         out2 = F.interpolate(half_disp * 2.0, scale_factor=(2.0, 2.0),
                                       mode='bilinear',align_corners =False).squeeze(1)
