@@ -199,7 +199,7 @@ class BGNet(SubModule):
         # 最终在 [H/2,W/2] 的尺寸上预测了 0-96 的视差概率分布，得到了每个点的预测视差 half_disp
         # 然后对 2*half_disp 进行双线性插值，得到[H,W]尺寸上的每点预测视差
         disparity_samples = disparity_samples.repeat(slice.size()[0], 1, slice.size()[2], slice.size()[3])
-        # d * softmax(C_H)
+        # sum(d * softmax(C_H))
         half_disp = torch.sum(disparity_samples * slice,dim = 1).unsqueeze(1)
         out2 = F.interpolate(half_disp * 2.0, scale_factor=(2.0, 2.0),
                                       mode='bilinear',align_corners =False).squeeze(1)
