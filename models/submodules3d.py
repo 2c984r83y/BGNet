@@ -7,7 +7,10 @@ from __future__ import print_function
 import torch
 import torch.nn as nn
 import torch.utils.data
-from models.submodules import SubModule, convbn_3d_lrelu, convbn_transpose_3d
+import torch.nn.functional as F
+from models.submodules import SubModule, convbn_3d_lrelu, convbn_transpose_3d,convbn_3d
+from models.attention import Attention_3d
+
 class HourGlass(SubModule):
     def __init__(self, inplanes=16):
         super(HourGlass, self).__init__()
@@ -51,6 +54,7 @@ class CoeffsPredictor(HourGlass):
         #[B,G,D,H,W] -> [B,D,G,H,W]
         coeffs = self.last_for_guidance(output1).permute(0,2,1,3,4).contiguous()
         return coeffs
+
 
 
 

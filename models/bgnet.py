@@ -125,7 +125,6 @@ class BGNet(SubModule):
         self.coeffs_disparity_predictor = CoeffsPredictor()
 
         self.dres0 = nn.Sequential(convbn_3d_lrelu(44, 32, 3, 1, 1),
-                                   MultiheadSelfAttention(32, 4),
                                    convbn_3d_lrelu(32, 16, 3, 1, 1))
         # self.dres0 = hourglass(44)
         self.guide = GuideNN()
@@ -148,12 +147,10 @@ class BGNet(SubModule):
         # start = time.time()
         
         #  构建 cost volume: refimg_fea, targetimg_fea, maxdisp, num_groups
-        # [B, 44, 25, H/8, W/8]
-        cost_volume = build_gwc_volume(left_gwc_feature, right_gwc_feature, 25, 44)
+        cost_volume = build_gwc_volume(left_gwc_feature, right_gwc_feature, 25, 44) # [B, 44, 25, H/8, W/8]
         # Fig.2: 3D convolution
-        cost_volume = self.dres0(cost_volume)
-        
-        # coeffs:[B,D,G,H,W]
+        cost_volume = self.dres0(cost_volume)   # [B, 16, 25, H/8, W/8]        
+        # coeffs: [B,D,G,H,W]
         # [B, 25, 44, H/8, W/8]
         # HourGlass: 3D conv and 3D deconv
         coeffs = self.coeffs_disparity_predictor(cost_volume)
@@ -234,26 +231,6 @@ class BGNet(SubModule):
                                             
         return out2,out2
 
-class MultiheadSelfAttention(nn.Module):
-    def __init__(self, channels, num_heads):
-        super().__init__()
-        self.channels = channels
-        self.num_heads = num_heads
-        self.query = nn.Conv2d(channels, channels // num_heads, kernel_size=1)
-        self.key = nn.Conv2d(channels, channels // num_heads, kernel_size=1)
-        self.value = nn.Conv2d(channels, channels, kernel_size=1)
-        self.softmax = nn.Softmax(dim=-1)
-
-    def forward(self, x):
-        batch_size, _, height, width = x.size()
-        q = self.query(x).view(batch_size, self.num_heads, height * width, -1)
-        k = self.key(x).view(batch_size, self.num_heads, height * width, -1)
-        v = self.value(x).view(batch_size, self.num_heads, height * width, -1)
-
-        attn = self.softmax((q @ k.transpose(-2, -1)) / (self.channels // self.num_heads) ** 0.5)
-        out = (attn @ v).transpose(1, 2).contiguous().view(batch_size, -1, height, width)
-
-        return out
 
 class attention_block(nn.Module):
     def __init__(self, channels_3d, num_heads=8, block=4):

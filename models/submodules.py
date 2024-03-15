@@ -26,10 +26,10 @@ def deconvbn_2d_lrelu(in_planes, out_planes, kernel_size, stride, pad, dilation=
                                dilation=dilation, bias=True),
             nn.BatchNorm2d(out_planes),                   
             nn.LeakyReLU(negative_slope=0.1, inplace=True))
-        
+# Add from ACVNet
 def convbn_3d(in_channels, out_channels, kernel_size, stride, pad):
     return nn.Sequential(nn.Conv3d(in_channels, out_channels, kernel_size=kernel_size, stride=stride,
-                                   padding=pad, bias=False),
+                                   padding=(pad, pad, pad), bias=False),
                          nn.BatchNorm3d(out_channels))
 
 def convbn_3d_lrelu(in_planes, out_planes, kernel_size, stride, pad):

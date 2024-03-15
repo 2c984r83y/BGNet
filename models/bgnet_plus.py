@@ -7,7 +7,7 @@ from __future__ import print_function
 from models.feature_extractor_fast import feature_extraction
 from models.submodules3d import CoeffsPredictor
 from models.submodules2d import HourglassRefinement
-from models.submodules import SubModule, convbn_2d_lrelu, convbn_3d_lrelu,convbn_2d_Tanh
+from models.submodules import SubModule, convbn_2d_lrelu, convbn_3d_lrelu,convbn_2d_Tanh,convbn_3d
 from nets.warp import disp_warp
 import torch
 import torch.nn as nn
@@ -75,6 +75,8 @@ class BGNet_Plus(SubModule):
 
         self.dres0 = nn.Sequential(convbn_3d_lrelu(44, 32, 3, 1, 1),
                                    convbn_3d_lrelu(32, 16, 3, 1, 1))
+        
+        
         self.guide = GuideNN()
         self.slice = Slice()
         self.weight_init()
@@ -86,10 +88,12 @@ class BGNet_Plus(SubModule):
         _,                          right_gwc_feature = self.feature_extraction(right_input)
         guide = self.guide(left_low_level_features_1) #[B,1,H,W]
         cost_volume = build_gwc_volume(left_gwc_feature,right_gwc_feature,25,44)
-
+        print(cost_volume.size())
         cost_volume = self.dres0(cost_volume)
+        print(cost_volume.size())
         coeffs = self.coeffs_disparity_predictor(cost_volume)
-
+        print("coeffs size:")
+        print(coeffs.size())
         list_coeffs = torch.split(coeffs,1,dim = 1)
         index = torch.arange(0,97)
         index_float = index/4.0
@@ -157,3 +161,5 @@ class BGNet_Plus(SubModule):
                                       mode='bilinear',align_corners =False).squeeze(1)
                                             
         return out1,out2
+
+
