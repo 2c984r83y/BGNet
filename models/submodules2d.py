@@ -102,6 +102,8 @@ class HourglassRefinement(SubModule):
         self.conv3a = BasicConv(64, 96, kernel_size=3, stride=2, padding=1)
         self.conv4a = BasicConv(96, 128, kernel_size=3, stride=2,padding=1)
         
+        self.attn = MultiheadSelfAttention(96, 16)
+        
         self.deconv4a = Conv2x(128, 96, deconv=True)
         self.deconv3a = Conv2x(96, 64, deconv=True)
         self.deconv2a = Conv2x(64, 48, deconv=True)
@@ -144,6 +146,8 @@ class HourglassRefinement(SubModule):
         x = self.conv4a(x)
         rem4 = x
 
+        rem3 = self.attn(rem3)
+        
         x = self.deconv4a(x, rem3)
         rem3 = x
 
@@ -173,3 +177,41 @@ class HourglassRefinement(SubModule):
         # disp = disp.squeeze(1)  # [B, H, W]
 
         return disp            
+
+class MultiheadSelfAttention(nn.Module):
+    def __init__(self, input_channel, head_number):
+        super(MultiheadSelfAttention, self).__init__()
+        self.head_number = head_number
+        self.input_channel = input_channel
+        self.head_dim = input_channel // head_number
+
+        self.query_linear = nn.Conv2d(input_channel, input_channel, kernel_size=1)
+        self.key_linear = nn.Conv2d(input_channel, input_channel, kernel_size=1)
+        self.value_linear = nn.Conv2d(input_channel, input_channel, kernel_size=1)
+
+        self.out_linear = nn.Conv2d(input_channel, input_channel, kernel_size=1)
+
+    def forward(self, x):
+        batch_size, _, height, width = x.size()
+
+        # Split the input into multiple heads
+        query = self.query_linear(x).view(batch_size, self.head_number, self.head_dim, height, width).transpose(1, 2)
+        key = self.key_linear(x).view(batch_size, self.head_number, self.head_dim, height, width).transpose(1, 2)
+        value = self.value_linear(x).view(batch_size, self.head_number, self.head_dim, height, width).transpose(1, 2)
+
+        # Scale the query
+        query = query / (self.head_dim ** (1/4))
+
+        # Compute the attention weights
+        attn_weights = torch.matmul(query, key.transpose(-2, -1))
+        attn_weights = F.softmax(attn_weights, dim=-1)
+
+        # Apply the attention weights to the value
+        attn_output = torch.matmul(attn_weights, value)
+
+        # Merge the heads
+        attn_output = attn_output.transpose(1, 2).contiguous().view(batch_size, self.input_channel, height, width)
+
+        # Apply the output linear layer
+        output = self.out_linear(attn_output)
+        return output

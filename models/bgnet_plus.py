@@ -156,4 +156,4 @@ class BGNet_Plus(SubModule):
         out2 = F.interpolate(half_disp * 2.0, scale_factor=(2.0, 2.0),
                                       mode='bilinear',align_corners =False).squeeze(1)
                                             
-        return out1,out2        
+        return out1,out2

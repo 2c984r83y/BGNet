@@ -7,7 +7,7 @@ from __future__ import print_function
 from models.feature_extractor_fast import feature_extraction
 from models.submodules3d import CoeffsPredictor
 from models.submodules2d import HourglassRefinement
-from models.submodules import SubModule, convbn_2d_lrelu, convbn_3d_lrelu,convbn_2d_Tanh
+from models.submodules import SubModule, convbn_2d_lrelu, convbn_3d_lrelu,convbn_2d_Tanh,convbn_3d
 from nets.warp import disp_warp
 import torch
 import torch.nn as nn
@@ -28,20 +28,46 @@ class Slice(SubModule):
         """
         https://pytorch.org/docs/stable/generated/torch.nn.functional.grid_sample.html
         https://www.paddlepaddle.org.cn/documentation/docs/zh///api/paddle/nn/functional/grid_sample_cn.html
-        根据 grid 的坐标在 input 中进行插值(e.g. bilinear interpolation)
-        提供一个input的Tensor以及一个对应的flow-field grid(比如光流，体素流等)
-        然后根据grid中每个位置提供的坐标信息, (这里指input中pixel的坐标)
-        将input中对应位置的像素值填充到grid指定的位置, 得到最终的输出
+        (function) def grid_sample(
+                        input: Tensor,
+                        grid: Tensor,
+                        mode: str = ...,
+                        padding_mode: str = ...,
+                        align_corners: Any | None = ...
+                    ) -> Tensor
+        根据 grid[n, h, w](二维向量, 其值为 x 坐标和 y 坐标) 在 input 中进行 bilinear interpolation
+        提供一个 input 的 Tensor 以及一个对应的 flow-field grid (比如光流，体素流等)
+        然后根据 grid 中每个位置提供的坐标信息, (这里指input中pixel的坐标)
+        将 input 中对应位置的像素值填充到grid指定的位置, 得到最终的输出
         grid[n, h, w] 是一个二维向量，它用于指定输入图像中的像素位置 x 和 y. 这些位置将被用来插值输出值 output[n, :, h, w]。
         在4D输入的情况下, grid 的形状为 (N, H_out, W_out, 2)，其中：
-        N 是批次大小(batch size)
-        H_out 和 W_out 是输出图像的高度和宽度。
-        2 表示二维向量，其中第一个元素是 x 坐标，第二个元素是 y 坐标。
+            N 是批次大小(batch size)
+            H_out 和 W_out 是输出图像的高度和宽度。
+            2 表示二维向量，其中第一个元素是 x 坐标，第二个元素是 y 坐标。
         在5D输入的情况下, grid 的形状为 (N, D_out, H_out, W_out, 3)，其中：
-        D_out 是输出图像的深度(depth)。
-        3 表示三维向量，其中前两个元素是 x 和 y 坐标，第三个元素是 z 坐标。
-        [N, 1, 44, H/8, W/8] [N, 1, H/2, W/2, 3]
+            D_out 是输出图像的深度(depth)。
+            3 表示三维向量，其中前两个元素是 x 和 y 坐标，第三个元素是 z 坐标。
+        Q: 插值计算是在输入张量中计算的吗?
+        1) 插值计算是在输入张量中进行的。torch.nn.functional.grid_sample 函数使用输入值和来自网格的像素位置来计算输出。
+            这些像素位置由网格中的 (x, y) 坐标指定，用于插值输出值。因此，插值计算是在输入张量的像素上进行的，以生成输出。
+        Q: grid提供了什么? 坐标吗?
+        2) grid 提供了坐标信息。grid 中的每个 (x, y) 坐标指定了输入像素的位置，用于插值输出值。
+            这些坐标是归一化的采样像素位置，范围应在 [-1, 1] 内。例如, x = -1, y = -1 是输入的左上角像素, x = 1, y = 1 是输入的右下角像素
+        Q: 从最终结果来看,grid_sample实现什么?将输入tensor扭曲为grid的样子?
+        3) 实现目的是将输入张量按照网格的样式进行扭曲。具体来说：
+            首先，你提供了一个输入张量，它是你想要进行扭曲的原始数据。
+            然后，你提供了一个网格，其中的每个 (x, y) 坐标指定了输入像素的位置，用于插值输出值。
+            grid_sample 函数会根据网格中的坐标信息，对输入张量进行插值，生成输出。
+            这个过程类似于将输入张量的像素位置按照网格的指导进行变换，从而实现了扭曲的效果。
+        Q: grid[n, h, w]是如何得到x和y坐标的?
+        4) grid 是一个网格，其形状为 (N, H_out, W_out, 2)(4D情况)或 (N, D_out, H_out, W_out, 3)(5D情况)。
+            对于每个输出位置 output[n, :, h, w], grid[n, h, w] 是一个大小为2的向量, 其中的两个值分别表示 x 和 y 坐标。
+            这些坐标是归一化的采样像素位置，范围应在 [-1, 1] 内。例如：
+            x = -1, y = -1 对应输入的左上角像素。
+            x = 1, y = 1 对应输入的右下角像素。
+            因此, grid 中的 (x, y) 坐标指定了输入像素的位置，用于插值输出值 output[n, :, h, w]
         """
+        # [N, 1, 44, H/8, W/8] [N, 1, H/2, W/2, 3]
         coeff = F.grid_sample(bilateral_grid, guidemap_guide,align_corners = False)
         return coeff.squeeze(2) #[B,1,H,W]
 # 32 channels -> 16 channels -> 1 channel
@@ -99,12 +125,15 @@ class BGNet(SubModule):
         self.coeffs_disparity_predictor = CoeffsPredictor()
 
         self.dres0 = nn.Sequential(convbn_3d_lrelu(44, 32, 3, 1, 1),
+                                   MultiheadSelfAttention(32, 4),
                                    convbn_3d_lrelu(32, 16, 3, 1, 1))
+        # self.dres0 = hourglass(44)
         self.guide = GuideNN()
         self.slice = Slice()
+
         self.weight_init()
 
-    def forward(self, left_input, right_input):         
+    def forward(self, left_input, right_input):
         # Fig.2: Feature extraction
         left_low_level_features_1, left_gwc_feature  = self.feature_extraction(left_input)
         _,                         right_gwc_feature = self.feature_extraction(right_input)
@@ -121,7 +150,6 @@ class BGNet(SubModule):
         #  构建 cost volume: refimg_fea, targetimg_fea, maxdisp, num_groups
         # [B, 44, 25, H/8, W/8]
         cost_volume = build_gwc_volume(left_gwc_feature, right_gwc_feature, 25, 44)
-        
         # Fig.2: 3D convolution
         cost_volume = self.dres0(cost_volume)
         
@@ -206,4 +234,145 @@ class BGNet(SubModule):
                                             
         return out2,out2
 
+class MultiheadSelfAttention(nn.Module):
+    def __init__(self, channels, num_heads):
+        super().__init__()
+        self.channels = channels
+        self.num_heads = num_heads
+        self.query = nn.Conv2d(channels, channels // num_heads, kernel_size=1)
+        self.key = nn.Conv2d(channels, channels // num_heads, kernel_size=1)
+        self.value = nn.Conv2d(channels, channels, kernel_size=1)
+        self.softmax = nn.Softmax(dim=-1)
 
+    def forward(self, x):
+        batch_size, _, height, width = x.size()
+        q = self.query(x).view(batch_size, self.num_heads, height * width, -1)
+        k = self.key(x).view(batch_size, self.num_heads, height * width, -1)
+        v = self.value(x).view(batch_size, self.num_heads, height * width, -1)
+
+        attn = self.softmax((q @ k.transpose(-2, -1)) / (self.channels // self.num_heads) ** 0.5)
+        out = (attn @ v).transpose(1, 2).contiguous().view(batch_size, -1, height, width)
+
+        return out
+
+class attention_block(nn.Module):
+    def __init__(self, channels_3d, num_heads=8, block=4):
+        """
+        ws 1 for stand attention
+        """
+        super(attention_block, self).__init__()
+        self.block = block
+        self.dim_3d = channels_3d
+        self.num_heads = num_heads
+        head_dim_3d = self.dim_3d // num_heads  # 每个head的维度
+        self.scale_3d = head_dim_3d ** -0.5 # 缩放因子
+        # 全连接层可以将输入数据的特征数从 self.dim_3d 扩大到 self.dim_3d 的3倍
+        # 以计算查询、键和值这三个部分
+        self.qkv_3d = nn.Linear(self.dim_3d, self.dim_3d * 3, bias=True)
+        self.final1x1 = torch.nn.Conv3d(self.dim_3d, self.dim_3d, 1)
+
+
+    def forward(self, x):
+        # pad input to be a multiple of block
+        B, C, D, H0, W0 = x.shape
+        pad_l = pad_t = 0
+        pad_r = (self.block[2] - W0 % self.block[2]) % self.block[2]
+        pad_b = (self.block[1] - H0 % self.block[1]) % self.block[1]
+        # pad zeros at edge to make the input shape to be a multiple of block
+        x = F.pad(x, (pad_l, pad_r, pad_t, pad_b))
+        B, C, D, H, W = x.shape
+        d, h, w = D//self.block[0], H//self.block[1], W//self.block[2]
+        # x: [B, C, D, H, W] -> [B, d, h, w, self.block[0], self.block[1], self.block[2], C]
+        x = x.view(B, C, d,self.block[0], h, self.block[1], w, self.block[2]).permute(0, 2, 4, 6, 3, 5, 7, 1)
+        # self.qkv_3d(x) 线性变换，将输入数据的特征数从 self.dim_3d 扩大到 self.dim_3d 的3倍
+        # C // self.num_heads 是每个注意力头的通道数
+        # (3, B, d*h*w, self.numheads, self.block[0]*self.block[1]*self.block[2], C // self.numheads)
+        # reshape: tensor 一维展开后再重新组织
+        # permute: tensor 维度换位
+        qkv_3d = self.qkv_3d(x).reshape(B, d*h*w, self.block[0]*self.block[1]*self.block[2], 3, self.num_heads,
+                                            C // self.num_heads).permute(3, 0, 1, 4, 2, 5)
+        # assign q, k, v
+        # (B, d*h*w, self.numheads, self.block[0]*self.block[1]*self.block[2], C // self.numheads)
+        q_3d, k_3d, v_3d = qkv_3d[0], qkv_3d[1], qkv_3d[2]
+        # 计算Query(q_3d) 和 Key(k_3d)相似性
+        # @: torch.matmul
+        # 要求第一个矩阵的列数（最后一个维度）等于第二个矩阵的行数（倒数第二个维度）
+        # a: (2, 3, 4) , b: (4, 5)
+        # (2, 3, 4) @ (4, 5) -> (2, 3, 5)
+        # 使用广播机制将 b 扩充为 (2, 4, 5)
+        # 对每个(3, 4) 和 (4, 5)做矩阵乘法，得到(3, 5)的矩阵
+        # 然后把两个(3, 5)的矩阵拼接起来，得到(2, 3, 5)的矩阵
+        # (a,b,c,d,e,f) @ (a,b,c,d,f,e) -> (a,b,c,d,e,e)
+        # 转置最后和倒数第二个维度后进行矩阵乘法，得到注意力权重系数
+        # q_3d: (B, d*h*w, self.numheads, self.block[0]*self.block[1]*self.block[2], C // self.numheads) 
+        # k_3d: (B, d*h*w, self.numheads, C // self.numheads, self.block[0]*self.block[1]*self.block[2]) 
+        # attn: (B, d*h*w, self.numheads, self.block[0]*self.block[1]*self.block[2], self.block[0]*self.block[1]*self.block[2])
+        attn = (q_3d @ k_3d.transpose(-2, -1)) * self.scale_3d
+        if pad_r > 0 or pad_b > 0:
+            mask = torch.zeros((1, H, W), device=x.device)
+            # 最后 pad_b 行和所有的列填充为 1
+            mask[:, -pad_b:, :].fill_(1)
+            # 所有的行的最后 pad_r 列填充为 1
+            mask[:, :, -pad_r:].fill_(1)
+            mask = mask.reshape(1, h, self.block[1], w, self.block[2]).transpose(2, 3).reshape(1,  h*w, self.block[1]*self.block[2])
+            # unsqueeze: 在指定位置增加一个维度
+            attn_mask = mask.unsqueeze(2) - mask.unsqueeze(3)  # 1, _h*_w, self.block*self.block, self.block*self.block
+            #  -1000.0 在 softmax 操作后的值接近于 0, 有效地屏蔽掉某些位置
+            attn_mask = attn_mask.masked_fill(attn_mask != 0, float(-1000.0)).masked_fill(attn_mask == 0, float(0.0))
+            # 在第二维上重复 d 次, 在第三维上重复 self.block[0] 次, 在第四维上重复 self.block[0] 次
+            attn = attn + attn_mask.repeat(1, d, self.block[0], self.block[0]).unsqueeze(2)
+        # 对 atten 进行归一化处理
+        attn = torch.softmax(attn, dim=-1)
+        # 根据权重系数对 Value(v_3d) 进行加权求和
+        # 将 attn 张量的每一行（最后一个维度，因为 dim=-1）
+        # 转换为一个概率分布，每一行的所有元素的和都为 1
+        # x -> (B, d*h*w, self.numheads, self.block[0]*self.block[1]*self.block[2], self.block[0]*self.block[1]*self.block[2], C // self.numheads)
+        # x -> (B, d, h ,w, self.num_heads, self.block[0], self.block[1], self.block[2], -1)
+        # x -> (B, self.num_heads, -1, d, self.block[0], h, self.block[1], w, self.block[2])
+        # tensor 中的 -1 表示自动计算该维度的大小
+        x = (attn @ v_3d).view(B, d, h ,w, self.num_heads, self.block[0], self.block[1], self.block[2], -1).permute(0,4,8,1,5,2,6,3,7)
+        # 注意到: d, h, w = D//self.block[0], H//self.block[1], W//self.block[2]
+        x = x.reshape(B, C, D, H, W)
+        if pad_r > 0 or pad_b > 0:
+            x = x[:, :, :, :H0, :W0]
+        return self.final1x1(x)
+
+class hourglass(nn.Module):
+    def __init__(self, in_channels):
+        super(hourglass, self).__init__()
+
+        self.conv1 = nn.Sequential(convbn_3d(in_channels, in_channels * 2, 3, 2, 1),
+                                   nn.ReLU(inplace=True))
+
+        self.conv2 = nn.Sequential(convbn_3d(in_channels * 2, in_channels * 2, 3, 1, 1),
+                                   nn.ReLU(inplace=True))
+
+        self.conv3 = nn.Sequential(convbn_3d(in_channels * 2, in_channels * 4, 3, 2, 1),
+                                   nn.ReLU(inplace=True))
+
+        self.conv4 = nn.Sequential(convbn_3d(in_channels * 4, in_channels * 4, 3, 1, 1),
+                                   nn.ReLU(inplace=True))
+        #! attention block
+        # 16 heads
+        self.attention_block = attention_block(channels_3d=in_channels * 4, num_heads=16, block=(4, 4, 4))
+
+        self.conv5 = nn.Sequential(
+            nn.ConvTranspose3d(in_channels * 4, in_channels * 2, 3, padding=1, output_padding=1, stride=2, bias=False),
+            nn.BatchNorm3d(in_channels * 2))
+
+        self.conv6 = nn.Sequential(
+            nn.ConvTranspose3d(in_channels * 2, in_channels, 3, padding=1, output_padding=1, stride=2, bias=False),
+            nn.BatchNorm3d(in_channels))
+
+        self.redir1 = convbn_3d(in_channels, in_channels, kernel_size=1, stride=1, pad=0)
+        self.redir2 = convbn_3d(in_channels * 2, in_channels * 2, kernel_size=1, stride=1, pad=0)
+
+    def forward(self, x):
+        conv1 = self.conv1(x)
+        conv2 = self.conv2(conv1)
+        conv3 = self.conv3(conv2)
+        conv4 = self.conv4(conv3)
+        conv4 = self.attention_block(conv4)
+        conv5 = F.relu(self.conv5(conv4) + self.redir2(conv2), inplace=True)
+        conv6 = F.relu(self.conv6(conv5) + self.redir1(x), inplace=True)
+        return conv6

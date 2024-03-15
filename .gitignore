@@ -7,3 +7,6 @@ checkpoint_*.pth
 logs
 *.pyc
 *.ckpt
+# TensorBoard log files
+events.out.tfevents.*
+/.idea
