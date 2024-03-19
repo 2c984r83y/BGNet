@@ -8,6 +8,7 @@ import time
 from datasets import __datasets__
 from models.bgnet import BGNet
 from models.bgnet_plus import BGNet_Plus
+from models.bgnet_plus_attn import BGNet_Plus_Attn
 from utils import *
 import torch
 import torch.optim as optim
@@ -17,7 +18,7 @@ import gc
 from tensorboardX import SummaryWriter
 
 parser = argparse.ArgumentParser(description='BGNet')
-parser.add_argument('--model', default='bgnet_plus', help='select a model structure')
+parser.add_argument('--model', default='BGNet_Plus_Attn', help='select a model structure')
 parser.add_argument('--dataset', default='dsec_png', help='dataset name', choices=__datasets__.keys())
 parser.add_argument('--datapath', default='/home/zhaoqinghao/dataset/DSEC/output',
                     help='datapath')

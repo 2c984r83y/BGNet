@@ -66,9 +66,9 @@ def disparity_regression(x, maxdisp):
     disp_values = torch.arange(0, maxdisp + 1, dtype=x.dtype, device=x.device)
     disp_values = disp_values.view(1, maxdisp + 1, 1, 1)
     return torch.sum(x * disp_values, 1, keepdim=True)
-class BGNet_Plus(SubModule):
+class BGNet_Plus_Attn(SubModule):
     def __init__(self):
-        super(BGNet_Plus, self).__init__()
+        super(BGNet_Plus_Attn, self).__init__()
         self.softmax = nn.Softmax(dim = 1)
         #! Add attention module in HourglassRefinementAttn
         self.refinement_net = HourglassRefinementAttn()
