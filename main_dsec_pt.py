@@ -1,7 +1,7 @@
 from __future__ import print_function, division
 import argparse
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
 from torch.utils.data import DataLoader
 import torch.utils.data
 import time

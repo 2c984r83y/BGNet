@@ -30,7 +30,7 @@ parser.add_argument('--batch_size', type=int, default=28, help='training batch s
 parser.add_argument('--test_batch_size', type=int, default=16, help='testing batch size')
 parser.add_argument('--epochs', type=int, default=600, help='number of epochs to train')
 parser.add_argument('--lr', type=float, default=0.001, help='base learning rate')
-parser.add_argument('--lrepochs',default="300,400:10", type=str,  help='the epochs to decay lr: the downscale rate')
+parser.add_argument('--lrepochs',default="200,300,400:10", type=str,  help='the epochs to decay lr: the downscale rate')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',

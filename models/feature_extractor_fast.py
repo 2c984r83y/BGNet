@@ -133,9 +133,9 @@ class feature_extraction(nn.Module):
         self.conv1a = BasicConv(32, 48, kernel_size=3, stride=2, padding=1)
         self.conv2a = BasicConv(48, 64, kernel_size=3, stride=2, padding=1)
         self.conv3a = BasicConv(64, 96, kernel_size=3, stride=2, padding=1)
-#         self.conv4a = BasicConv(96, 128, kernel_size=3, stride=2, padding=1)
+        # self.conv4a = BasicConv(96, 128, kernel_size=3, stride=2, padding=1)
 
-#         self.deconv4a = Conv2x(128, 96, deconv=True)
+        # self.deconv4a = Conv2x(128, 96, deconv=True)
         self.deconv3a = Conv2x(96, 64, deconv=True) #? deconv 如何实现?
         self.deconv2a = Conv2x(64, 48, deconv=True)
         self.deconv1a = Conv2x(48, 32, deconv=True)
@@ -143,9 +143,9 @@ class feature_extraction(nn.Module):
         self.conv1b = Conv2x(32, 48)
         self.conv2b = Conv2x(48, 64)
         self.conv3b = Conv2x(64, 96)
-#         self.conv4b = Conv2x(96, 128)
+        # self.conv4b = Conv2x(96, 128)
 
-#         self.deconv4b = Conv2x(128, 96, deconv=True)
+        # self.deconv4b = Conv2x(128, 96, deconv=True)
         self.deconv3b = Conv2x(96, 64, deconv=True)
         self.deconv2b = Conv2x(64, 48, deconv=True)
         self.deconv1b = Conv2x(48, 32, deconv=True)
@@ -181,7 +181,7 @@ class feature_extraction(nn.Module):
         x = self.reduce(x)  # 1/8 * 32
         feat2 = x
         rem0 = x
-        # ! ResNet architecture
+        #? ResNet architecture
         x = self.conv1a(x)  # 1/16 * 48
         rem1 = x
         x = self.conv2a(x)  # 1/32 * 64

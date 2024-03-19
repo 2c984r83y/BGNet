@@ -85,8 +85,8 @@ def groupwise_correlation(fea1, fea2, num_groups):
     B, C, H, W = fea1.shape
     assert C % num_groups == 0
     channels_per_group = C // num_groups
-    
-    cost = (fea1 * fea2).view([B, num_groups, channels_per_group, H, W]).mean(dim=2)
+    # 在channels_per_group维度上求均值
+    cost = (fea1 * fea2).view([B, num_groups, channels_per_group, H, W]).mean(dim=2)    
     assert cost.shape == (B, num_groups, H, W)
     return cost
 
@@ -97,6 +97,15 @@ def build_gwc_volume(refimg_fea, targetimg_fea, maxdisp, num_groups):
     volume = refimg_fea.new_zeros([B, num_groups, maxdisp, H, W])
     for i in range(maxdisp):
         if i > 0:
+            '''
+            https://2c984r83y.github.io/posts/survey/#volumetric-methods
+            i: 表示选择从索引 i 开始到最后的所有元素, 左图的右半边(左图向右移动 i 个像素后的部分)
+            :-i 表示选择从第一列开始到倒数第 i 列的所有元素, 右图的左半边(右图向左移动 i 个像素后的部分)
+            物体在右视图中的位置总是在左视图中的位置的左侧或者相同位置
+            左图的x坐标更大, 右图的x坐标更小
+            ? cost volume 的第 i 层对应的是左图右移 i 个像素后的部分和右图左移 i 个像素后的部分的相关性
+            左图(x,y),右图(x-i,y)
+            '''
             volume[:, :, i, :, i:] = groupwise_correlation(refimg_fea[:, :, :, i:], targetimg_fea[:, :, :, :-i],
                                                            num_groups)
         else:
@@ -133,6 +142,7 @@ class BGNet(SubModule):
 
     def forward(self, left_input, right_input):
         # Fig.2: Feature extraction
+        # Featuer extraction 将二维的图像转换为三维的特征
         left_low_level_features_1, left_gwc_feature  = self.feature_extraction(left_input)
         _,                         right_gwc_feature = self.feature_extraction(right_input)
         # [Batch size, Channels , Height, Weight]
@@ -145,7 +155,7 @@ class BGNet(SubModule):
         # torch.cuda.synchronize()
         # start = time.time()
         
-        #  构建 cost volume: refimg_fea, targetimg_fea, maxdisp, num_groups
+        #  构建 cost volume: 将三维特征拼接为四维 cost volume
         cost_volume = build_gwc_volume(left_gwc_feature, right_gwc_feature, 25, 44) # [B, 44, 25, H/8, W/8]
         # Fig.2: 3D convolution
         cost_volume = self.dres0(cost_volume)   # [B, 16, 25, H/8, W/8]        
