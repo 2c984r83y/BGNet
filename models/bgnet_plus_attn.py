@@ -6,7 +6,7 @@
 from __future__ import print_function
 from models.feature_extractor_fast import feature_extraction
 from models.submodules3d import CoeffsPredictor
-from models.submodules2d import HourglassRefinementAttn
+from models.submodules2d import HourglassRefinement
 from models.submodules import SubModule, convbn_2d_lrelu, convbn_3d_lrelu,convbn_2d_Tanh
 from models.attention import Attention_3d
 from nets.warp import disp_warp
@@ -71,7 +71,7 @@ class BGNet_Plus_Attn(SubModule):
         super(BGNet_Plus_Attn, self).__init__()
         self.softmax = nn.Softmax(dim = 1)
         #! Add attention module in HourglassRefinementAttn
-        self.refinement_net = HourglassRefinementAttn()
+        self.refinement_net = HourglassRefinement()
         self.feature_extraction = feature_extraction()
         self.coeffs_disparity_predictor = CoeffsPredictor()
 
