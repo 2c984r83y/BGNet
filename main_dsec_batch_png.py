@@ -19,26 +19,27 @@ from tensorboardX import SummaryWriter
 
 parser = argparse.ArgumentParser(description='BGNet')
 parser.add_argument('--model', default='bgnet_plus', help='select a model structure')
-parser.add_argument('--dataset', default='dsec_png', help='dataset name', choices=__datasets__.keys())
-parser.add_argument('--datapath', default='/home/zhaoqinghao/dataset/DSEC/output',
+parser.add_argument('--dataset', default='dsec_png_batch', help='dataset name', choices=__datasets__.keys())
+parser.add_argument('--datapath', default='/home/zhaoqinghao/DSEC/batch_png/',
                     help='datapath')
-parser.add_argument('--trainlist', default='/home/zhaoqinghao/DSEC/output/filepath/train_uint16.txt', 
+parser.add_argument('--trainlist', default='/disk2/users/M22_zhaoqinghao/DSEC/scripts/output.txt', 
                     help='training list')
-parser.add_argument('--testlist', default='/home/zhaoqinghao/DSEC/output/filepath/test_uint16.txt', 
+parser.add_argument('--testlist', default='/disk2/users/M22_zhaoqinghao/DSEC/scripts/output.txt', 
                     help='testing list')
 parser.add_argument('--batch_size', type=int, default=32, help='training batch size')
 parser.add_argument('--test_batch_size', type=int, default=16, help='testing batch size')
 parser.add_argument('--epochs', type=int, default=400, help='number of epochs to train')
 parser.add_argument('--lr', type=float, default=0.001, help='base learning rate')
-parser.add_argument('--lrepochs',default="100,200,220,300:10", type=str,  help='the epochs to decay lr: the downscale rate')
+parser.add_argument('--lrepochs',default="200,220,250,300:10", type=str,  help='the epochs to decay lr: the downscale rate')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
-parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed (default: 1)')
+parser.add_argument('--seed', type=int, default=1, metavar='S',
+                    help='random seed (default: 1)')
 parser.add_argument('--summary_freq', type=int, default=100, help='the frequency of saving summary')
 parser.add_argument('--save_freq', type=int, default=2, help='the frequency of saving checkpoint')
-parser.add_argument('--logdir',default='./logs/', help='the directory to save logs and checkpoints')
+parser.add_argument('--logdir',default='./logs_png_batch/', help='the directory to save logs and checkpoints')
 parser.add_argument('--loadckpt', default=None, help='load the weights from a specific checkpoint')
-parser.add_argument('--resume', default=True, action='store_true', help='continue training the model')
+parser.add_argument('--resume', default=False, action='store_true', help='continue training the model')
 parser.add_argument('--patience', type=int, default=10, help='Number of epochs with no improvement after which training will be stopped.')
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -168,11 +169,13 @@ def main():
         # TRAIN
         total_train_loss = 0
         for batch_idx, sample in enumerate(TrainImgLoader):
+            print(len(TrainImgLoader))
             global_step = len(TrainImgLoader) * epoch + batch_idx
             start_time = time.time()
-            imgL, imgR, disp_L = sample['left'], sample['right'], sample['disparity']
-            # loss = train(imgL.cuda(), imgR.cuda(), disp_L.cuda())
+            imgL, imgR, disp_L = sample
             print(imgL.size())
+            # loss = train(imgL.cuda(), imgR.cuda(), disp_L.cuda())
+            
             loss, scalar_outputs, image_outputs = train_sample(imgL.cuda(), imgR.cuda(), disp_L.cuda(), False)
             do_summary = global_step % args.summary_freq == 0
             if do_summary:

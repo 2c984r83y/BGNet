@@ -9,8 +9,10 @@ from torch.utils.data import Dataset
 from PIL import Image
 import numpy as np
 from datasets.data_io import get_transform, read_all_lines
+import glob
+import torch
 
-class DSEC_png_Dataset(Dataset):
+class DSEC_png_batch_Dataset(Dataset):
     def __init__(self, datapath, list_filename, training):
         self.datapath = datapath
         self.left_filenames, self.right_filenames, self.disp_filenames,self.mask_filenames = self.load_path(list_filename)
@@ -33,19 +35,30 @@ class DSEC_png_Dataset(Dataset):
             return left_images, right_images, disp_images,mask_images
     def load_image(self, filename):
         return Image.open(filename).convert('L')
+    
+    def load_batch_image(self, filename):
+        file_prefix = filename.split('.')[0]  # Get the file prefix
+        file_pattern = file_prefix + '_*.png'  # Create the file pattern
+        file_list = glob.glob(file_pattern)  # Get a list of matching files
+        images = []
+        for file in file_list:
+            image = Image.open(file).convert('L')  # Open and convert each image
+            image = np.array(image)  # Convert image to numpy array
+            images.append(image)
+        images = np.stack(images, axis=0)  # Stack the images along the first dimension
+        return images
 
     def load_disp(self, filename):
         data = Image.open(filename)
         data = np.array(data, dtype=np.float32) / 256.
-        # data = np.array(data, dtype=np.float32)
         return data
 
     def __len__(self):
         return len(self.left_filenames)
 
     def __getitem__(self, index):
-        left_img = self.load_image(os.path.join(self.datapath, self.left_filenames[index]))
-        right_img = self.load_image(os.path.join(self.datapath, self.right_filenames[index]))
+        left_img = self.load_batch_image(os.path.join(self.datapath, self.left_filenames[index]))
+        right_img = self.load_batch_image(os.path.join(self.datapath, self.right_filenames[index]))
         if self.mask_filenames:
             mask = self.load_image(os.path.join(self.datapath, self.mask_filenames[index]))
         else:
@@ -64,42 +77,37 @@ class DSEC_png_Dataset(Dataset):
             # left_img = left_img.convert('L')
             # right_img = right_img.convert('L')
             
-            w, h = left_img.size
-            crop_w, crop_h = 320, 256
+            c, h, w = left_img.shape
+            crop_h, crop_w = 256, 320
 
             x1 = random.randint(0, w - crop_w)
             y1 = random.randint(0, h - crop_h)
 
             # random crop
-            left_img = left_img.crop((x1, y1, x1 + crop_w, y1 + crop_h))
-            right_img = right_img.crop((x1, y1, x1 + crop_w, y1 + crop_h))
-            # disparity = disparity.crop((x1, y1, x1 + crop_w, y1 + crop_h))
+            left_img = left_img[:, y1:y1 + crop_h, x1:x1 + crop_w]
+            right_img = right_img[:, y1:y1 + crop_h, x1:x1 + crop_w]
             disparity = disparity[y1:y1 + crop_h, x1:x1 + crop_w]
             
             left_img = np.ascontiguousarray(left_img, dtype=np.float32)
             right_img = np.ascontiguousarray(right_img, dtype=np.float32)
-            # to tensor, normalize
-            preprocess = get_transform()
-            left_img = preprocess(left_img)
-            right_img = preprocess(right_img)
-            
-            # return [left_img,right_img],-disparity
+
+            left_img = torch.from_numpy(left_img)
+            right_img = torch.from_numpy(right_img)
+
             return {"left": left_img,
                    "right": right_img,
                    "disparity": disparity}
         else:
-            left_img = left_img.crop((0, 0, 640, 448))
-            right_img = right_img.crop((0, 0, 640, 448))
+            left_img = left_img[:, :crop_h, :crop_w]
+            right_img = right_img[:, :crop_h, :crop_w]
             disparity = disparity[0:448, 0:640]
             left_img = np.ascontiguousarray(left_img, dtype=np.float32)
             right_img = np.ascontiguousarray(right_img, dtype=np.float32)
             disparity = np.ascontiguousarray(disparity, dtype=np.float32)
-            preprocess = get_transform()    # get_transform()函数返回一个转换列表，它将图像转换为 PyTorch 张量
-            left_img = preprocess(left_img)
-            right_img = preprocess(right_img)
 
-            
-            # return [left_img,right_img],-disparity
+            left_img = torch.from_numpy(left_img)
+            right_img = torch.from_numpy(right_img)
+
             return {"left": left_img,
                    "right": right_img,
                    "disparity": disparity}
