@@ -1,14 +1,14 @@
 from __future__ import print_function, division
 import argparse
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 from torch.utils.data import DataLoader
 import torch.utils.data
 import time
 from datasets import __datasets__
 from models.bgnet import BGNet
 from models.bgnet_plus import BGNet_Plus
-from models.bgnet_plus_attn import BGNet_Plus_Attn
+from models.bgnet_plus_batch_png import BGNet_Plus_Batch
 from utils import *
 import torch
 import torch.optim as optim
@@ -18,19 +18,19 @@ import gc
 from tensorboardX import SummaryWriter
 
 parser = argparse.ArgumentParser(description='BGNet')
-parser.add_argument('--model', default='bgnet_plus', help='select a model structure')
+parser.add_argument('--model', default='bgnet_plus_batch', help='select a model structure')
 parser.add_argument('--dataset', default='dsec_png_batch', help='dataset name', choices=__datasets__.keys())
 parser.add_argument('--datapath', default='/home/zhaoqinghao/DSEC/batch_png/',
                     help='datapath')
-parser.add_argument('--trainlist', default='/disk2/users/M22_zhaoqinghao/DSEC/scripts/output.txt', 
+parser.add_argument('--trainlist', default='/home/zhaoqinghao/DSEC/batch_png/filepath/train_uint16.txt', 
                     help='training list')
-parser.add_argument('--testlist', default='/disk2/users/M22_zhaoqinghao/DSEC/scripts/output.txt', 
+parser.add_argument('--testlist', default='/home/zhaoqinghao/DSEC/batch_png/filepath/test_uint16.txt', 
                     help='testing list')
 parser.add_argument('--batch_size', type=int, default=32, help='training batch size')
 parser.add_argument('--test_batch_size', type=int, default=16, help='testing batch size')
 parser.add_argument('--epochs', type=int, default=400, help='number of epochs to train')
 parser.add_argument('--lr', type=float, default=0.001, help='base learning rate')
-parser.add_argument('--lrepochs',default="200,220,250,300:10", type=str,  help='the epochs to decay lr: the downscale rate')
+parser.add_argument('--lrepochs',default="100,200,250,300:10", type=str,  help='the epochs to decay lr: the downscale rate')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
@@ -64,8 +64,8 @@ TestImgLoader = DataLoader(dsec_test_dataset, batch_size= args.test_batch_size, 
 
 if args.model == 'bgnet':
     model = BGNet().cuda()
-elif args.model == 'bgnet_plus':
-    model = BGNet_Plus().cuda()
+elif args.model == 'bgnet_plus_batch':
+    model = BGNet_Plus_Batch().cuda()
 
 if args.cuda:
     model.cuda()
@@ -95,6 +95,8 @@ def train_sample(imgL, imgR, disp_L, compute_metrics=False):
     model.train()
     if args.cuda:
         imgL, imgR, disp_gt = imgL.cuda(), imgR.cuda(), disp_L.cuda()
+    imgL = torch.squeeze(imgL, 0)
+    imgR = torch.squeeze(imgL, 0)
     optimizer.zero_grad()
     disp_ests, _ = model(imgL, imgR)
     mask = (disp_gt > 0)
@@ -169,14 +171,12 @@ def main():
         # TRAIN
         total_train_loss = 0
         for batch_idx, sample in enumerate(TrainImgLoader):
-            print(len(TrainImgLoader))
             global_step = len(TrainImgLoader) * epoch + batch_idx
             start_time = time.time()
-            imgL, imgR, disp_L = sample
-            print(imgL.size())
+            imgL, imgR, disp_L = sample['left'], sample['right'], sample['disparity']
             # loss = train(imgL.cuda(), imgR.cuda(), disp_L.cuda())
             
-            loss, scalar_outputs, image_outputs = train_sample(imgL.cuda(), imgR.cuda(), disp_L.cuda(), False)
+            loss, scalar_outputs, image_outputs = train_sample(imgL, imgR, disp_L, False)
             do_summary = global_step % args.summary_freq == 0
             if do_summary:
                 logger.add_scalar('train_loss', loss, global_step)

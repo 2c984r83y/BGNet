@@ -1,7 +1,7 @@
 from __future__ import print_function, division
 import argparse
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="0,1"
+os.environ["CUDA_VISIBLE_DEVICES"]="1"
 from torch.utils.data import DataLoader
 import torch.utils.data
 import time
@@ -172,7 +172,6 @@ def main():
             start_time = time.time()
             imgL, imgR, disp_L = sample['left'], sample['right'], sample['disparity']
             # loss = train(imgL.cuda(), imgR.cuda(), disp_L.cuda())
-            print(imgL.size())
             loss, scalar_outputs, image_outputs = train_sample(imgL.cuda(), imgR.cuda(), disp_L.cuda(), False)
             do_summary = global_step % args.summary_freq == 0
             if do_summary:
