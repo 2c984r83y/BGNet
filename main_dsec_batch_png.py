@@ -1,7 +1,7 @@
 from __future__ import print_function, division
 import argparse
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="1"
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
 from torch.utils.data import DataLoader
 import torch.utils.data
 import time
@@ -26,17 +26,17 @@ parser.add_argument('--trainlist', default='/home/zhaoqinghao/DSEC/batch_png/fil
                     help='training list')
 parser.add_argument('--testlist', default='/home/zhaoqinghao/DSEC/batch_png/filepath/test_uint16.txt', 
                     help='testing list')
-parser.add_argument('--batch_size', type=int, default=32, help='training batch size')
+parser.add_argument('--batch_size', type=int, default=2, help='training batch size')
 parser.add_argument('--test_batch_size', type=int, default=16, help='testing batch size')
-parser.add_argument('--epochs', type=int, default=400, help='number of epochs to train')
+parser.add_argument('--epochs', type=int, default=1, help='number of epochs to train')
 parser.add_argument('--lr', type=float, default=0.001, help='base learning rate')
-parser.add_argument('--lrepochs',default="100,200,250,300:10", type=str,  help='the epochs to decay lr: the downscale rate')
+parser.add_argument('--lrepochs',default="1:10", type=str,  help='the epochs to decay lr: the downscale rate')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
 parser.add_argument('--summary_freq', type=int, default=100, help='the frequency of saving summary')
-parser.add_argument('--save_freq', type=int, default=2, help='the frequency of saving checkpoint')
+parser.add_argument('--save_freq', type=int, default=1, help='the frequency of saving checkpoint')
 parser.add_argument('--logdir',default='./logs_png_batch/', help='the directory to save logs and checkpoints')
 parser.add_argument('--loadckpt', default=None, help='load the weights from a specific checkpoint')
 parser.add_argument('--resume', default=False, action='store_true', help='continue training the model')
@@ -117,6 +117,8 @@ def train_sample(imgL, imgR, disp_L, compute_metrics=False):
 
 def test_sample(imgL,imgR,disp_gt):
     model.eval()
+    imgL = torch.squeeze(imgL, 0)
+    imgR = torch.squeeze(imgL, 0)
     with torch.no_grad():
         disp_ests,_ = model(imgL.cuda(), imgR.cuda())
     mask = (disp_gt > 0)

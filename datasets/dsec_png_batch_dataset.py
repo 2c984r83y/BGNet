@@ -40,11 +40,7 @@ class DSEC_png_batch_Dataset(Dataset):
         file_prefix = filename.split('.')[0]  # Get the file prefix
         file_pattern = file_prefix + '_*.png'  # Create the file pattern
         file_list = glob.glob(file_pattern)  # Get a list of matching files
-        images = []
-        for file in file_list:
-            image = Image.open(file).convert('L')  # Open and convert each image
-            image = np.array(image)  # Convert image to numpy array
-            images.append(image)
+        images = [np.array(Image.open(file).convert('L')) for file in file_list]  # Open, convert, and convert each image to numpy array
         images = np.stack(images, axis=0)  # Stack the images along the first dimension
         return images
 
@@ -76,7 +72,7 @@ class DSEC_png_batch_Dataset(Dataset):
             #rgb2gray
             # left_img = left_img.convert('L')
             # right_img = right_img.convert('L')
-            
+            # print("crop")
             c, h, w = left_img.shape
             crop_h, crop_w = 256, 320
 
@@ -98,6 +94,7 @@ class DSEC_png_batch_Dataset(Dataset):
                    "right": right_img,
                    "disparity": disparity}
         else:
+            crop_h, crop_w = 448, 640
             left_img = left_img[:, :crop_h, :crop_w]
             right_img = right_img[:, :crop_h, :crop_w]
             disparity = disparity[0:448, 0:640]

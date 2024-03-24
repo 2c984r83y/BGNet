@@ -10,7 +10,7 @@ from torch.utils.data import Dataset
 from PIL import Image
 import numpy as np
 from datasets.data_io import get_transform, read_all_lines
-
+import time
 class DSEC_pt_Dataset(Dataset):
     def __init__(self, datapath, list_filename, training):
         self.datapath = datapath
@@ -35,13 +35,12 @@ class DSEC_pt_Dataset(Dataset):
     def load_image(self, filename):
         return Image.open(filename).convert('L')
     
-    def load_pt(sefl, filename):
+    def load_pt(self, filename):
         return torch.load(filename)
 
     def load_disp(self, filename):
         data = Image.open(filename)
-        # data = np.array(data, dtype=np.float32) / 256.
-        data = np.array(data, dtype=np.float32)
+        data = np.array(data, dtype=np.float32) / 256.
         return data
 
     def __len__(self):
@@ -67,7 +66,7 @@ class DSEC_pt_Dataset(Dataset):
             #rgb2gray
             # left_img = left_img.convert('L')
             # right_img = right_img.convert('L')
-            
+
             c, h, w = left_event.shape
             crop_h, crop_w = 256, 320
 
@@ -79,24 +78,25 @@ class DSEC_pt_Dataset(Dataset):
             right_event = right_event[:, y1:y1 + crop_h, x1:x1 + crop_w]
             disparity = disparity[y1:y1 + crop_h, x1:x1 + crop_w]
             
-            left_event = np.ascontiguousarray(left_event, dtype=np.float32)
-            right_event = np.ascontiguousarray(right_event, dtype=np.float32)
+            # left_event = np.ascontiguousarray(left_event, dtype=np.float32)
+            # right_event = np.ascontiguousarray(right_event, dtype=np.float32)
             # to tensor, normalize
             # preprocess = get_transform()
             # left_img = preprocess(left_img)
             # right_img = preprocess(right_img)
             
+
             # return [left_img,right_img],-disparity
             return {"left": left_event,
                    "right": right_event,
                    "disparity": disparity}
         else:
-            left_event = left_event[:, :crop_h, :crop_w]
-            right_event = right_event[:, :crop_h, :crop_w]
+            left_event = left_event[:, :448, :640]
+            right_event = right_event[:, :448, :640]
             disparity = disparity[0:448, 0:640]
-            left_event = np.ascontiguousarray(left_event, dtype=np.float32)
-            right_event = np.ascontiguousarray(right_event, dtype=np.float32)
-            disparity = np.ascontiguousarray(disparity, dtype=np.float32)
+            # left_event = np.ascontiguousarray(left_event, dtype=np.float32)
+            # right_event = np.ascontiguousarray(right_event, dtype=np.float32)
+            # disparity = np.ascontiguousarray(disparity, dtype=np.float32)
             # preprocess = get_transform()    # get_transform()函数返回一个转换列表，它将图像转换为 PyTorch 张量
             # left_img = preprocess(left_img)
             # right_img = preprocess(right_img)
