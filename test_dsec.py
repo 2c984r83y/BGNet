@@ -1,7 +1,7 @@
 from __future__ import print_function, division
 import argparse
 import os
-os.environ["CUDA_VISIBLE_DEVICES"]="1"
+os.environ["CUDA_VISIBLE_DEVICES"]="0"
 from torch.utils.data import DataLoader
 import torch.utils.data
 import time
@@ -17,8 +17,8 @@ parser = argparse.ArgumentParser(description='BGNet')
 parser.add_argument('--model', default='bgnet_plus', help='select a model structure')
 parser.add_argument('--dataset', default='dsec_png', help='dataset name', choices=__datasets__.keys())
 parser.add_argument('--datapath', default='/home/zhaoqinghao/dataset/DSEC/output',help='datapath')
-parser.add_argument('--testlist', default='/home/zhaoqinghao/DSEC/test.txt', help='testing list')
-parser.add_argument('--loadckpt', default='./pretrained_models/checkpoint_000300.ckpt', 
+parser.add_argument('--testlist', default='/home/zhaoqinghao/DSEC/output/filepath/test_uint16.txt', help='testing list')
+parser.add_argument('--loadckpt', default='./logs/checkpoint_000226.ckpt', 
                     help='load the weights from a specific checkpoint')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')

@@ -29,21 +29,21 @@ import random
 parser = argparse.ArgumentParser(description='BGNet')
 parser.add_argument('--model', default='bgnet_plus_batch', help='select a model structure')
 
-parser.add_argument('--train_dir', help='Path to DSEC dataset directory',default='/home/zhaoqinghao/dataset/DSEC/test/')
-parser.add_argument('--test_dir', help='Path to DSEC dataset directory',default='/home/zhaoqinghao/dataset/DSEC/test/')
+parser.add_argument('--train_dir', help='Path to DSEC dataset directory',default='/home/zhaoqinghao/dataset/DSEC/train')
+parser.add_argument('--test_dir', help='Path to DSEC dataset directory',default='/home/zhaoqinghao/dataset/DSEC/test')
 
-parser.add_argument('--batch_size', type=int, default=28, help='training batch size')
+parser.add_argument('--batch_size', type=int, default=16, help='training batch size')
 parser.add_argument('--num_workers', type=int, default=16, help='number of workers for dataloader')
 parser.add_argument('--epochs', type=int, default=300, help='number of epochs to train')
 parser.add_argument('--lr', type=float, default=0.001, help='base learning rate')
 parser.add_argument('--lrepochs',default="50,100,150,200,250:10", type=str,  help='the epochs to decay lr: the downscale rate')
 parser.add_argument('--no-cuda', action='store_true', default=False, help='enables CUDA training')
 parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed (default: 1)')
-parser.add_argument('--summary_freq', type=int, default=100, help='the frequency of saving summary')
+parser.add_argument('--summary_freq', type=int, default=10, help='the frequency of saving summary')
 parser.add_argument('--save_freq', type=int, default=1, help='the frequency of saving checkpoint')
 parser.add_argument('--logdir',default='./logs_dsec/', help='the directory to save logs and checkpoints')
 parser.add_argument('--loadckpt', default=None, help='load the weights from a specific checkpoint')
-parser.add_argument('--resume', default=False, action='store_true', help='continue training the model')
+parser.add_argument('--resume', default=True, action='store_true', help='continue training the model')
 parser.add_argument('--patience', type=int, default=10, help='Number of epochs with no improvement after which training will be stopped.')
 
 args = parser.parse_args()
@@ -77,8 +77,9 @@ num_workers = args.num_workers
 test_loader = DataLoader(
         dataset=test_dataset,
         batch_size=batch_size,
-        shuffle=True,
+        shuffle=False,
         num_workers=num_workers,
+        pin_memory=False,
         drop_last=False)
 
 if args.model == 'bgnet':
@@ -168,28 +169,28 @@ def main():
         
         # TRAIN
         total_train_loss = 0
+        start_time = 0
         for i, data in enumerate(train_loader, start=1):
             global_step = len(train_loader) * epoch + i
-            start_time = time.time()
+            
             
             disp = data['disparity_gt'].numpy().squeeze().astype('uint16')/256.0
             disp = torch.from_numpy(disp)
-            
+            disp = disp.cuda()
             left_voxel_grid = data['representation']['left']  # [B, C, H, W]
             right_voxel_grid = data['representation']['right']
+            left_voxel_grid = left_voxel_grid.cuda()
+            right_voxel_grid = right_voxel_grid.cuda()
             _, num_channels, _, _ = left_voxel_grid.shape
             left_channels = [left_voxel_grid[:, i] for i in range(num_channels)]
             right_channels = [right_voxel_grid[:, i] for i in range(num_channels)]
             for j, channel in enumerate(left_channels):
-                array = channel.numpy()
-                img = (array / array.max() * 256).astype('uint8')
-                left_voxel_grid[:, j] = torch.from_numpy(img)
+                channel = channel.mul(256 / channel.max()).to(torch.uint8)
+                left_voxel_grid[:, j] = channel
             for j, channel in enumerate(right_channels):
-                array = channel.numpy()
-                img = (array / array.max() * 256).astype('uint8')
-                right_voxel_grid[:, j] = torch.from_numpy(img)
-            print(left_voxel_grid.size())
-            print(disp.size())
+                channel = channel.mul(256 / channel.max()).to(torch.uint8)
+                right_voxel_grid[:, j] = channel
+
             _, _ , h, w = left_voxel_grid.shape
             crop_h, crop_w = 256, 320
 
@@ -213,6 +214,7 @@ def main():
                                                                                        i,
                                                                                        len(train_loader) - 1, loss,
                                                                                        time.time() - start_time))
+            start_time = time.time()
             total_train_loss += loss
         
         print('Epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(train_loader)))

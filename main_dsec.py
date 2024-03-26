@@ -20,11 +20,11 @@ from tensorboardX import SummaryWriter
 parser = argparse.ArgumentParser(description='BGNet')
 parser.add_argument('--model', default='bgnet_plus', help='select a model structure')
 parser.add_argument('--dataset', default='dsec_png', help='dataset name', choices=__datasets__.keys())
-parser.add_argument('--datapath', default='/home/zhaoqinghao/dataset/DSEC/output',
+parser.add_argument('--datapath', default='/disk2/users/M22_zhaoqinghao/Dataset/output',
                     help='datapath')
-parser.add_argument('--trainlist', default='/home/zhaoqinghao/DSEC/output/filepath/train_uint16.txt', 
+parser.add_argument('--trainlist', default='/disk2/users/M22_zhaoqinghao/Dataset/output/filepath/train_uint16.txt', 
                     help='training list')
-parser.add_argument('--testlist', default='/home/zhaoqinghao/DSEC/output/filepath/test_uint16.txt', 
+parser.add_argument('--testlist', default='/disk2/users/M22_zhaoqinghao/Dataset/output/filepath/test_uint16.txt', 
                     help='testing list')
 parser.add_argument('--batch_size', type=int, default=32, help='training batch size')
 parser.add_argument('--test_batch_size', type=int, default=16, help='testing batch size')
@@ -82,7 +82,7 @@ if args.resume:
     state_dict = torch.load(loadckpt)
     model.load_state_dict(state_dict['model'])
     optimizer.load_state_dict(state_dict['optimizer'])
-    start_epoch = state_dict['epoch']
+    start_epoch = state_dict['epoch'] + 1
 elif args.loadckpt:
     # load the checkpoint file specified by args.loadckpt
     print("loading model {}".format(args.loadckpt))
