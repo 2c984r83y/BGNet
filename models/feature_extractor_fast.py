@@ -295,7 +295,7 @@ class feature_extraction_3d(nn.Module):
         feat0 = x
         x = self.layer4(x)  # 1/8 * 128
         feat1 = x
-        x = self.reduce(x)  # 1/8 * 32
+        x = self.reduce(x)  # 1/8 * 32 
         feat2 = x
         rem0 = x
         #? ResNet architecture

@@ -8,7 +8,7 @@ import time
 from datasets import __datasets__
 from models.bgnet import BGNet
 from models.bgnet_plus import BGNet_Plus
-from models.bgnet_plus_batch_png import BGNet_Plus_Batch
+from models.bgnet_plus_png_batch import BGNet_Plus_Batch
 from utils import *
 import torch
 import torch.optim as optim
@@ -26,7 +26,7 @@ parser.add_argument('--trainlist', default='/home/zhaoqinghao/DSEC/batch_png/fil
                     help='training list')
 parser.add_argument('--testlist', default='/home/zhaoqinghao/DSEC/batch_png/filepath/test_uint16.txt', 
                     help='testing list')
-parser.add_argument('--batch_size', type=int, default=2, help='training batch size')
+parser.add_argument('--batch_size', type=int, default=16, help='training batch size')
 parser.add_argument('--test_batch_size', type=int, default=16, help='testing batch size')
 parser.add_argument('--epochs', type=int, default=1, help='number of epochs to train')
 parser.add_argument('--lr', type=float, default=0.001, help='base learning rate')
@@ -37,7 +37,7 @@ parser.add_argument('--seed', type=int, default=1, metavar='S',
                     help='random seed (default: 1)')
 parser.add_argument('--summary_freq', type=int, default=100, help='the frequency of saving summary')
 parser.add_argument('--save_freq', type=int, default=1, help='the frequency of saving checkpoint')
-parser.add_argument('--logdir',default='./logs_png_batch/', help='the directory to save logs and checkpoints')
+parser.add_argument('--logdir',default='./logs_test/', help='the directory to save logs and checkpoints')
 parser.add_argument('--loadckpt', default=None, help='load the weights from a specific checkpoint')
 parser.add_argument('--resume', default=False, action='store_true', help='continue training the model')
 parser.add_argument('--patience', type=int, default=10, help='Number of epochs with no improvement after which training will be stopped.')

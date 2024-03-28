@@ -4,9 +4,9 @@
 # Written by Bin Xu
 # ---------------------------------------------------------------------------
 from __future__ import print_function
-from models.feature_extractor_fast import feature_extraction
+from models.feature_extractor_fast import feature_extraction_3d
 from models.submodules3d import CoeffsPredictor
-from models.submodules2d import HourglassRefinement
+from models.submodules2d import HourglassRefinement,HourglassRefinement_3d
 from models.submodules import SubModule, convbn_2d_lrelu, convbn_3d_lrelu,convbn_2d_Tanh
 from models.attention import Attention_3d
 from nets.warp import disp_warp
@@ -66,20 +66,18 @@ def disparity_regression(x, maxdisp):
     disp_values = torch.arange(0, maxdisp + 1, dtype=x.dtype, device=x.device)
     disp_values = disp_values.view(1, maxdisp + 1, 1, 1)
     return torch.sum(x * disp_values, 1, keepdim=True)
-class BGNet_Plus_Attn(SubModule):
+class BGNet_Plus_Batch(SubModule):
     def __init__(self):
-        super(BGNet_Plus_Attn, self).__init__()
+        super(BGNet_Plus_Batch, self).__init__()
         self.softmax = nn.Softmax(dim = 1)
-        #! Add attention module in HourglassRefinementAttn
-        self.refinement_net = HourglassRefinement()
-        self.feature_extraction = feature_extraction()
+        # submodules_2d
+        self.refinement_net = HourglassRefinement_3d()
+        # feature_extractor_fast
+        self.feature_extraction_3d = feature_extraction_3d()
         self.coeffs_disparity_predictor = CoeffsPredictor()
 
-        #! Add attention module in dres0
         self.dres0 = nn.Sequential(convbn_3d_lrelu(44, 32, 3, 1, 1),
-                                   Attention_3d(32, 8),
                                    convbn_3d_lrelu(32, 16, 3, 1, 1))
-        
         
         self.guide = GuideNN()
         self.slice = Slice()
@@ -87,9 +85,12 @@ class BGNet_Plus_Attn(SubModule):
  
     def forward(self, left_input, right_input):        
 
-
-        left_low_level_features_1,  left_gwc_feature  = self.feature_extraction(left_input)
-        _,                          right_gwc_feature = self.feature_extraction(right_input)
+        left_low_level_features_1,  left_gwc_feature  = self.feature_extraction_3d(left_input)
+        _,                          right_gwc_feature = self.feature_extraction_3d(right_input)
+        
+        
+        
+        
         guide = self.guide(left_low_level_features_1) #[B,1,H,W]
         cost_volume = build_gwc_volume(left_gwc_feature,right_gwc_feature,25,44)
         cost_volume = self.dres0(cost_volume)

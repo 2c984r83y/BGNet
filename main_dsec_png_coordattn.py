@@ -8,7 +8,7 @@ import time
 from datasets import __datasets__
 from models.bgnet import BGNet
 from models.bgnet_plus import BGNet_Plus
-from models.bgnet_plus_batch_png import BGNet_Plus_Batch
+from models.bgnet_plus_png_coordattn import BGNet_Plus_Attn
 from utils import *
 import torch
 import torch.optim as optim
@@ -18,28 +18,27 @@ import gc
 from tensorboardX import SummaryWriter
 
 parser = argparse.ArgumentParser(description='BGNet')
-parser.add_argument('--model', default='bgnet_plus_batch', help='select a model structure')
-parser.add_argument('--dataset', default='dsec_pt', help='dataset name', choices=__datasets__.keys())
-parser.add_argument('--datapath', default='/home/zhaoqinghao/DSEC/batch_png/',
+parser.add_argument('--model', default='bgnet_plus', help='select a model structure')
+parser.add_argument('--dataset', default='dsec_png', help='dataset name', choices=__datasets__.keys())
+parser.add_argument('--datapath', default='/disk2/users/M22_zhaoqinghao/Dataset/output',
                     help='datapath')
-parser.add_argument('--trainlist', default='/home/zhaoqinghao/DSEC/event/filepath/train_uint16.txt', 
+parser.add_argument('--trainlist', default='/disk2/users/M22_zhaoqinghao/Dataset/output/filepath/train_uint16.txt', 
                     help='training list')
-parser.add_argument('--testlist', default='/home/zhaoqinghao/DSEC/event/filepath/test_uint16.txt', 
+parser.add_argument('--testlist', default='/disk2/users/M22_zhaoqinghao/Dataset/output/filepath/test_uint16.txt', 
                     help='testing list')
-parser.add_argument('--batch_size', type=int, default=16, help='training batch size')
+parser.add_argument('--batch_size', type=int, default=32, help='training batch size')
 parser.add_argument('--test_batch_size', type=int, default=16, help='testing batch size')
 parser.add_argument('--epochs', type=int, default=400, help='number of epochs to train')
 parser.add_argument('--lr', type=float, default=0.001, help='base learning rate')
-parser.add_argument('--lrepochs',default="100,200,250,300:10", type=str,  help='the epochs to decay lr: the downscale rate')
+parser.add_argument('--lrepochs',default="100,200,220,300:10", type=str,  help='the epochs to decay lr: the downscale rate')
 parser.add_argument('--no-cuda', action='store_true', default=False,
                     help='enables CUDA training')
-parser.add_argument('--seed', type=int, default=1, metavar='S',
-                    help='random seed (default: 1)')
+parser.add_argument('--seed', type=int, default=1, metavar='S', help='random seed (default: 1)')
 parser.add_argument('--summary_freq', type=int, default=100, help='the frequency of saving summary')
 parser.add_argument('--save_freq', type=int, default=2, help='the frequency of saving checkpoint')
-parser.add_argument('--logdir',default='./logs_pt/', help='the directory to save logs and checkpoints')
+parser.add_argument('--logdir',default='./logs/', help='the directory to save logs and checkpoints')
 parser.add_argument('--loadckpt', default=None, help='load the weights from a specific checkpoint')
-parser.add_argument('--resume', default=False, action='store_true', help='continue training the model')
+parser.add_argument('--resume', default=True, action='store_true', help='continue training the model')
 parser.add_argument('--patience', type=int, default=10, help='Number of epochs with no improvement after which training will be stopped.')
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -56,7 +55,7 @@ StereoDataset = __datasets__[args.dataset]
 
 dsec_train = args.trainlist
 dsec_train_dataset = StereoDataset(datapath, dsec_train, True)
-TrainImgLoader = DataLoader(dsec_train_dataset, batch_size= args.batch_size, shuffle=True, num_workers=2, drop_last=False)
+TrainImgLoader = DataLoader(dsec_train_dataset, batch_size= args.batch_size, shuffle=True, num_workers=32, drop_last=False)
 
 dsec_test = args.testlist
 dsec_test_dataset = StereoDataset(datapath, dsec_test, False)
@@ -64,8 +63,8 @@ TestImgLoader = DataLoader(dsec_test_dataset, batch_size= args.test_batch_size, 
 
 if args.model == 'bgnet':
     model = BGNet().cuda()
-elif args.model == 'bgnet_plus_batch':
-    model = BGNet_Plus_Batch().cuda()
+elif args.model == 'bgnet_plus':
+    model = BGNet_Plus().cuda()
 
 if args.cuda:
     model.cuda()
@@ -83,7 +82,7 @@ if args.resume:
     state_dict = torch.load(loadckpt)
     model.load_state_dict(state_dict['model'])
     optimizer.load_state_dict(state_dict['optimizer'])
-    start_epoch = state_dict['epoch']
+    start_epoch = state_dict['epoch'] + 1
 elif args.loadckpt:
     # load the checkpoint file specified by args.loadckpt
     print("loading model {}".format(args.loadckpt))
@@ -95,8 +94,6 @@ def train_sample(imgL, imgR, disp_L, compute_metrics=False):
     model.train()
     if args.cuda:
         imgL, imgR, disp_gt = imgL.cuda(), imgR.cuda(), disp_L.cuda()
-    imgL = torch.squeeze(imgL, 0)
-    imgR = torch.squeeze(imgL, 0)
     optimizer.zero_grad()
     disp_ests, _ = model(imgL, imgR)
     mask = (disp_gt > 0)
@@ -117,8 +114,6 @@ def train_sample(imgL, imgR, disp_L, compute_metrics=False):
 
 def test_sample(imgL,imgR,disp_gt):
     model.eval()
-    imgL = torch.squeeze(imgL, 0)
-    imgR = torch.squeeze(imgL, 0)
     with torch.no_grad():
         disp_ests,_ = model(imgL.cuda(), imgR.cuda())
     mask = (disp_gt > 0)
@@ -177,23 +172,22 @@ def main():
             start_time = time.time()
             imgL, imgR, disp_L = sample['left'], sample['right'], sample['disparity']
             # loss = train(imgL.cuda(), imgR.cuda(), disp_L.cuda())
-            print('Epoch {}/{},Iter {}/{},time = {:.3f}'.format(epoch, args.epochs, batch_idx, len(TrainImgLoader) - 1,time.time() - start_time))
-        #     loss, scalar_outputs, image_outputs = train_sample(imgL, imgR, disp_L, False)
-        #     do_summary = global_step % args.summary_freq == 0
-        #     if do_summary:
-        #         logger.add_scalar('train_loss', loss, global_step)
-        #         # save_scalars(logger, 'train', scalar_outputs, global_step)
-        #         # save_images(logger, 'train', image_outputs, global_step)
-        #     del scalar_outputs, image_outputs
+            loss, scalar_outputs, image_outputs = train_sample(imgL.cuda(), imgR.cuda(), disp_L.cuda(), False)
+            do_summary = global_step % args.summary_freq == 0
+            if do_summary:
+                logger.add_scalar('train_loss', loss, global_step)
+                # save_scalars(logger, 'train', scalar_outputs, global_step)
+                # save_images(logger, 'train', image_outputs, global_step)
+            del scalar_outputs, image_outputs
             
-        #     print('Epoch {}/{}, Iter {}/{}, train loss = {:.3f}, time = {:.3f}'.format(epoch, args.epochs,
-        #                                                                                batch_idx,
-        #                                                                                len(TrainImgLoader) - 1, loss,
-        #                                                                                time.time() - start_time))
-        #     total_train_loss += loss
+            print('Epoch {}/{}, Iter {}/{}, train loss = {:.3f}, time = {:.3f}'.format(epoch, args.epochs,
+                                                                                       batch_idx,
+                                                                                       len(TrainImgLoader) - 1, loss,
+                                                                                       time.time() - start_time))
+            total_train_loss += loss
         
-        # print('Epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TrainImgLoader)))
-        # logger.add_scalar('total_train_loss', total_train_loss/len(TrainImgLoader), epoch)
+        print('Epoch %d total training loss = %.3f' %(epoch, total_train_loss/len(TrainImgLoader)))
+        logger.add_scalar('total_train_loss', total_train_loss/len(TrainImgLoader), epoch)
         # TEST
         avg_test_scalars = AverageMeterDict()
         total_test_loss = 0
